@@ -80,7 +80,7 @@ dependencies {
     implementation(libs.camera.lifecycle)
     implementation(libs.camera.view)
     implementation(libs.mlkit.text.recognition)
-    implementation(libs.mlkit.object.detection)
+    implementation(libs.mlkit.`object`.detection)
 
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.kotlinx.coroutines.play.services)
