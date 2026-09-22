@@ -22,6 +22,9 @@ data class DocumentReaderUiState(
     val documentoId: Long? = null,
     val recognizedText: String? = null,
     val errorMessage: String? = null,
+    val parrafos: List<String> = emptyList(),
+    val parrafoActual: Int = 0,
+    val estaLeyendo: Boolean = false,
 )
 
 @HiltViewModel
@@ -44,12 +47,13 @@ class DocumentReaderViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     init {
+        observarFinDeParrafo()
         voiceEngine.speak("Cámara inteligente lista. Apunta a un documento y toca capturar para leerlo en voz alta.")
     }
 
     fun onPhotoCaptured(imageUri: Uri, rutaImagen: String) {
         val usuario = sessionRepository.currentUser.value ?: return
-        _uiState.value = _uiState.value.copy(isProcessing = true, errorMessage = null)
+        _uiState.value = _uiState.value.copy(isProcessing = true, errorMessage = null, estaLeyendo = false)
         voiceEngine.speak("Procesando la imagen.")
         viewModelScope.launch {
             when (val outcome = repository.processCapturedPhoto(usuario.id, imageUri, rutaImagen)) {
@@ -57,8 +61,9 @@ class DocumentReaderViewModel @Inject constructor(
                     _uiState.value = DocumentReaderUiState(
                         documentoId = outcome.documentoId,
                         recognizedText = outcome.textoCompleto,
+                        parrafos = outcome.parrafos,
                     )
-                    voiceEngine.speak(outcome.textoCompleto)
+                    leerParrafo(0)
                     repository.logLectura(outcome.documentoId)
                 }
                 OcrOutcome.PocaLuz -> {
@@ -87,9 +92,50 @@ class DocumentReaderViewModel @Inject constructor(
 
     fun onReadAgainRequested() {
         val state = _uiState.value
-        if (state.recognizedText != null) {
-            voiceEngine.speak(state.recognizedText)
+        if (state.parrafos.isNotEmpty()) {
+            leerParrafo(0)
             state.documentoId?.let { id -> viewModelScope.launch { repository.logLectura(id) } }
         }
+    }
+
+    /** Dice en voz alta el párrafo [indice] y lo marca como el actual. */
+    private fun leerParrafo(indice: Int) {
+        val parrafo = _uiState.value.parrafos.getOrNull(indice) ?: return
+        _uiState.value = _uiState.value.copy(parrafoActual = indice, estaLeyendo = true)
+        voiceEngine.speak(parrafo)
+    }
+
+    /**
+     * TextToSpeech no avisa directamente cuándo termina: VoiceEngine pasa de
+     * Speaking a Idle. Solo avanzamos si lo que terminó fue el párrafo actual;
+     * stopSpeaking() también deja el estado en Idle, por eso se revisa estaLeyendo.
+     */
+    private fun observarFinDeParrafo() {
+        viewModelScope.launch {
+            var anterior: VoiceState = VoiceState.Idle
+            voiceEngine.state.collect { actual ->
+                val state = _uiState.value
+                val parrafo = state.parrafos.getOrNull(state.parrafoActual)
+                if (state.estaLeyendo && parrafo != null) {
+                    if (actual is VoiceState.Speaking && actual.text != parrafo) {
+                        // Otro módulo habló encima de la lectura: la damos por interrumpida.
+                        _uiState.value = state.copy(estaLeyendo = false)
+                    } else if (actual is VoiceState.Idle && anterior == VoiceState.Speaking(parrafo)) {
+                        val siguiente = state.parrafoActual + 1
+                        if (siguiente < state.parrafos.size) {
+                            leerParrafo(siguiente)
+                        } else {
+                            _uiState.value = state.copy(estaLeyendo = false)
+                        }
+                    }
+                }
+                anterior = actual
+            }
+        }
+    }
+
+    override fun onCleared() {
+        if (_uiState.value.estaLeyendo) voiceEngine.stopSpeaking()
+        super.onCleared()
     }
 }
