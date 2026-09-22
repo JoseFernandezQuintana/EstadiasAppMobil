@@ -52,17 +52,36 @@ class DocumentReaderViewModel @Inject constructor(
         _uiState.value = _uiState.value.copy(isProcessing = true, errorMessage = null)
         voiceEngine.speak("Procesando la imagen.")
         viewModelScope.launch {
-            repository.processCapturedPhoto(usuario.id, imageUri, rutaImagen)
-                .onSuccess { result ->
-                    _uiState.value = DocumentReaderUiState(documentoId = result.documentoId, recognizedText = result.texto)
-                    voiceEngine.speak(result.texto)
-                    repository.logLectura(result.documentoId)
+            when (val outcome = repository.processCapturedPhoto(usuario.id, imageUri, rutaImagen)) {
+                is OcrOutcome.Exito -> {
+                    _uiState.value = DocumentReaderUiState(
+                        documentoId = outcome.documentoId,
+                        recognizedText = outcome.textoCompleto,
+                    )
+                    voiceEngine.speak(outcome.textoCompleto)
+                    repository.logLectura(outcome.documentoId)
                 }
-                .onFailure {
+                OcrOutcome.PocaLuz -> {
+                    val message = "La imagen está muy oscura. Busca mejor iluminación e intenta de nuevo."
+                    _uiState.value = DocumentReaderUiState(errorMessage = message)
+                    voiceEngine.speak(message)
+                }
+                OcrOutcome.Borrosa -> {
+                    val message = "La imagen salió borrosa. Sostén el teléfono firme y vuelve a intentar."
+                    _uiState.value = DocumentReaderUiState(errorMessage = message)
+                    voiceEngine.speak(message)
+                }
+                OcrOutcome.SinTexto -> {
+                    val message = "No se detectó texto en la imagen."
+                    _uiState.value = DocumentReaderUiState(errorMessage = message)
+                    voiceEngine.speak(message)
+                }
+                is OcrOutcome.Error -> {
                     val message = "No se pudo leer el texto de la imagen. Intenta con mejor iluminación."
                     _uiState.value = DocumentReaderUiState(errorMessage = message)
                     voiceEngine.speak(message)
                 }
+            }
         }
     }
 
