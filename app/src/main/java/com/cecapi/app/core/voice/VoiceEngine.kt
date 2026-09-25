@@ -1,13 +1,31 @@
 package com.cecapi.app.core.voice
 
+import android.Manifest
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.media.AudioFormat
+import android.media.AudioManager
+import android.media.AudioRecord
+import android.media.MediaRecorder
+import android.media.ToneGenerator
+import android.media.audiofx.AcousticEchoCanceler
+import android.media.audiofx.NoiseSuppressor
+import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
+import android.os.SystemClock
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.os.VibratorManager
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
+import android.util.Log
+import androidx.core.content.ContextCompat
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -17,8 +35,11 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import java.util.Locale
 import java.util.UUID
+import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlin.concurrent.thread
+import kotlin.math.sqrt
 
 /**
  * Single shared wrapper around Android's [SpeechRecognizer] and [TextToSpeech].
@@ -32,6 +53,7 @@ import javax.inject.Singleton
 @Singleton
 class VoiceEngine @Inject constructor(
     @ApplicationContext private val context: Context,
+    private val cues: FeedbackCues,
 ) {
     private val _state = MutableStateFlow<VoiceState>(VoiceState.Idle)
     val state: StateFlow<VoiceState> = _state.asStateFlow()
@@ -41,7 +63,26 @@ class VoiceEngine @Inject constructor(
 
     private var textToSpeech: TextToSpeech? = null
     private var ttsReady = false
-    private val pendingSpeech = ArrayDeque<String>()
+    private val pendingSpeech = ArrayDeque<Pair<String, Boolean>>()
+
+    private val _mode = MutableStateFlow(AssistantMode.ACTIVE)
+    val mode: StateFlow<AssistantMode> = _mode.asStateFlow()
+
+    @Volatile var addressStyle: AddressStyle = AddressStyle.TU
+    private var currentPitch = 1.0f
+    private var currentVoiceName = ""
+
+    // Global voice commands (volume, phone status...) that work on every screen, registered by GlobalVoiceCommands.
+    private val speechInterceptors = mutableListOf<(String) -> Boolean>()
+
+    /** The last thing the assistant said aloud, so "repite lo que dijiste" can say it again. */
+    @Volatile
+    var lastSpoken: String? = null
+        private set
+
+    // Set by speak(listenAfter = true): open the mic as soon as the current utterance finishes,
+    // so a spoken prompt ("Dime tu usuario") flows straight into the user's answer.
+    @Volatile private var listenAfterSpeech = false
 
     // Backed by Módulo 1's `configuracion_usuario` table (see SessionRepository.aplicarConfiguracion).
     private var currentRate = 1.0f
@@ -49,11 +90,33 @@ class VoiceEngine @Inject constructor(
 
     private var speechRecognizer: SpeechRecognizer? = null
 
+    // Wake word: while enabled, a second recognizer keeps listening for one of [wakeWords]
+    // ("hola" plus the name the user gave the assistant). It never runs while the assistant
+    // is speaking or while a command is being captured, so it cannot trigger on its own voice.
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private var wakeWords: Set<String> = emptySet()
+    private var openMic = false
+    private var wakeRecognizer: SpeechRecognizer? = null
+    private val wakeRestart = Runnable { listenForWakeWord() }
+
+    // Barge-in: while the assistant talks, a light mic monitor (VOICE_COMMUNICATION source, so the
+    // phone's echo canceller strips most of our own voice) cuts the speech if the user starts talking.
+    @Volatile private var bargeInToken: AtomicBoolean? = null
+
     init {
         textToSpeech = TextToSpeech(context) { status ->
             ttsReady = status == TextToSpeech.SUCCESS
+            if (!ttsReady) {
+                // Nothing can be spoken at all: say so on screen and with a distinct double buzz.
+                Log.e(TAG, "TextToSpeech failed to start (status=$status)")
+                _state.value = VoiceState.Error(
+                    "La voz del teléfono no está disponible. Revisa que tenga un motor de voz instalado.",
+                )
+                cues.play(FeedbackCues.Cue.ERROR)
+            }
             if (ttsReady) {
-                textToSpeech?.language = Locale("es", "MX")
+                selectSpanishVoice()
+                applyProfile()
                 textToSpeech?.setSpeechRate(currentRate)
                 textToSpeech?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
                     override fun onStart(utteranceId: String?) {
@@ -61,36 +124,63 @@ class VoiceEngine @Inject constructor(
                     }
 
                     override fun onDone(utteranceId: String?) {
+                        stopBargeInDetection()
                         if (_state.value is VoiceState.Speaking) {
                             _state.value = VoiceState.Idle
                         }
+                        val listen = listenAfterSpeech
+                        listenAfterSpeech = false
+                        mainHandler.post { if (listen) startListening() else resumeWakeWord() }
                     }
 
                     @Deprecated("Deprecated in Java")
                     override fun onError(utteranceId: String?) {
+                        stopBargeInDetection()
+                        listenAfterSpeech = false
                         _state.value = VoiceState.Idle
+                        mainHandler.post { resumeWakeWord() }
                     }
                 })
                 while (pendingSpeech.isNotEmpty()) {
-                    speakInternal(pendingSpeech.removeFirst())
+                    val (text, listenAfter) = pendingSpeech.removeFirst()
+                    speakInternal(text, listenAfter)
                 }
             }
         }
     }
 
-    /** Reads [text] aloud. Interrupts whatever is currently being spoken. */
-    fun speak(text: String) {
-        if (!ttsReady) {
-            pendingSpeech.addLast(text)
-            return
+    /** Mexican Spanish if the phone has it, otherwise any Spanish, otherwise the phone's own language. */
+    private fun selectSpanishVoice() {
+        val tts = textToSpeech ?: return
+        val unusable = setOf(TextToSpeech.LANG_MISSING_DATA, TextToSpeech.LANG_NOT_SUPPORTED)
+        if (tts.setLanguage(Locale("es", "MX")) in unusable && tts.setLanguage(Locale("es")) in unusable) {
+            Log.w(TAG, "No Spanish voice installed; using the phone's default language")
+            tts.setLanguage(Locale.getDefault())
         }
-        speakInternal(text)
     }
 
-    private fun speakInternal(text: String) {
+    /**
+     * Reads [text] aloud. Interrupts whatever is currently being spoken.
+     * With [listenAfter] the mic opens as soon as the reading ends, to capture the user's answer.
+     */
+    fun speak(text: String, listenAfter: Boolean = false, force: Boolean = false) {
+        // Muted or stopped: stay quiet. Only the farewell after "para" goes through ([force]).
+        if (!force && _mode.value != AssistantMode.ACTIVE) return
+        if (!ttsReady) {
+            pendingSpeech.addLast(text to listenAfter)
+            return
+        }
+        speakInternal(text, listenAfter)
+    }
+
+    private fun speakInternal(text: String, listenAfter: Boolean) {
+        pauseWakeWord()
+        lastSpoken = text
+        listenAfterSpeech = listenAfter
         _state.value = VoiceState.Speaking(text)
         val params = Bundle().apply { putFloat(TextToSpeech.Engine.KEY_PARAM_VOLUME, currentVolume) }
         textToSpeech?.speak(text, TextToSpeech.QUEUE_FLUSH, params, UUID.randomUUID().toString())
+        startBargeInDetection()
     }
 
     /**
@@ -106,10 +196,203 @@ class VoiceEngine @Inject constructor(
     }
 
     fun stopSpeaking() {
+        silenceSpeech()
+        mainHandler.post { resumeWakeWord() }
+    }
+
+    // ---- Assistant mode: "silencio" and "para" ----------------------------------------------------
+
+    /** The person opened the app or tapped the mic: the assistant works normally again. */
+    fun activate() {
+        if (_mode.value == AssistantMode.ACTIVE) return
+        _mode.value = AssistantMode.ACTIVE
+        mainHandler.post { resumeWakeWord() }
+    }
+
+    /** Lets other classes handle a phrase on any screen before it reaches the screen's own ViewModel. */
+    fun addSpeechInterceptor(interceptor: (String) -> Boolean) {
+        speechInterceptors.add(interceptor)
+    }
+
+    /** "¿En qué te puedo ayudar?" in the wording the person chose (tú or usted). */
+    fun wakePrompt(): String = addressStyle.pick(VoiceMessages.WAKE_PROMPT, VoiceMessages.WAKE_PROMPT_USTED)
+
+    /** Every recognized phrase goes through here: control words first, then global commands, then the screens. */
+    private fun dispatchSpeech(text: String) {
+        if (handleControl(text)) return
+        // A screen that is capturing raw text (a username, a password) must receive it untouched.
+        if (!rawInput && speechInterceptors.any { it(text) }) return
+        if (!appVisible) {
+            // Heard outside the app (background listening): only the global commands can be answered.
+            speak(VoiceMessages.OPEN_APP)
+            return
+        }
+        _recognizedSpeech.tryEmit(RecognizedSpeech(text, System.currentTimeMillis()))
+    }
+
+    /** True while a screen wants the next phrase exactly as spoken, without global commands in between. */
+    @Volatile var rawInput = false
+
+    /** False while the app is not on screen (it may still be listening through the background service). */
+    @Volatile var appVisible = true
+
+    /** Called by the background service's "Detener" button: same as saying "para". */
+    fun stopByUser() = stopAssistant()
+
+    /**
+     * "silencio" / "espera" only quiet the assistant; "para" / "detente" stop it completely.
+     * They must be the whole phrase: "para" is also an everyday word ("para qué sirve").
+     */
+    private fun handleControl(text: String): Boolean {
+        when (VoiceText.normalize(text)) {
+            in SILENCE_PHRASES -> mute()
+            in STOP_PHRASES -> stopAssistant()
+            else -> return false
+        }
+        return true
+    }
+
+    private fun mute() {
+        _mode.value = AssistantMode.MUTED
+        silenceSpeech()
+        cues.play(FeedbackCues.Cue.NAVIGATE)
+        mainHandler.post { resumeWakeWord() }
+    }
+
+    private fun stopAssistant() {
+        silenceSpeech()
+        speak("Hasta luego.", force = true)
+        _mode.value = AssistantMode.STOPPED
+        stopListening()
+        pauseWakeWord()
+    }
+
+    // ---- Voice profile (Personalización) ------------------------------------------------------------
+
+    /** The phone's Spanish voices, so the person can pick one. Empty until the speech engine is ready. */
+    fun spanishVoices(): List<VoiceOption> {
+        val tts = textToSpeech ?: return emptyList()
+        if (!ttsReady) return emptyList()
+        return runCatching {
+            tts.voices.orEmpty()
+                .filter { it.locale.language == "es" }
+                .sortedBy { it.name }
+                .mapIndexed { index, voice ->
+                    val country = voice.locale.getDisplayCountry(Locale("es")).ifBlank { "genérica" }
+                    VoiceOption(voice.name, "Voz ${index + 1} · $country", voice.isNetworkConnectionRequired)
+                }
+        }.getOrDefault(emptyList())
+    }
+
+    /** [voiceName] empty means "automatic". [pitch] is 0.5 (low) to 2.0 (high). */
+    fun applyVoiceProfile(voiceName: String, pitch: Float) {
+        currentVoiceName = voiceName
+        currentPitch = pitch.coerceIn(0.5f, 2.0f)
+        if (ttsReady) applyProfile()
+    }
+
+    private fun applyProfile() {
+        val tts = textToSpeech ?: return
+        tts.setPitch(currentPitch)
+        if (currentVoiceName.isEmpty()) {
+            selectSpanishVoice()
+        } else {
+            tts.voices.orEmpty().firstOrNull { it.name == currentVoiceName }?.let { tts.voice = it }
+        }
+    }
+
+    private fun silenceSpeech() {
+        stopBargeInDetection()
+        listenAfterSpeech = false
+        pendingSpeech.clear()
         textToSpeech?.stop()
         if (_state.value is VoiceState.Speaking) {
             _state.value = VoiceState.Idle
         }
+    }
+
+    private fun startBargeInDetection() {
+        stopBargeInDetection()
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) !=
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            return
+        }
+        val minBuffer = AudioRecord.getMinBufferSize(BARGE_IN_SAMPLE_RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
+        if (minBuffer <= 0) return
+        val record = try {
+            AudioRecord(
+                MediaRecorder.AudioSource.VOICE_COMMUNICATION,
+                BARGE_IN_SAMPLE_RATE,
+                AudioFormat.CHANNEL_IN_MONO,
+                AudioFormat.ENCODING_PCM_16BIT,
+                minBuffer * 2,
+            )
+        } catch (e: Exception) {
+            Log.w(TAG, "Barge-in unavailable: ${e.message}")
+            return
+        }
+        if (record.state != AudioRecord.STATE_INITIALIZED) {
+            record.release()
+            return
+        }
+        val effects = listOfNotNull(
+            if (AcousticEchoCanceler.isAvailable()) AcousticEchoCanceler.create(record.audioSessionId) else null,
+            if (NoiseSuppressor.isAvailable()) NoiseSuppressor.create(record.audioSessionId) else null,
+        )
+        effects.forEach { it.enabled = true }
+
+        val token = AtomicBoolean(true)
+        bargeInToken = token
+        thread(name = "cecapi-barge-in", isDaemon = true) {
+            val frame = ShortArray(BARGE_IN_SAMPLE_RATE * BARGE_IN_FRAME_MS / 1000)
+            var loudMs = 0
+            var peak = 0.0
+            var sinceLogMs = 0
+            val startedAt = SystemClock.elapsedRealtime()
+            try {
+                record.startRecording()
+                while (token.get()) {
+                    val read = record.read(frame, 0, frame.size)
+                    if (read <= 0) break
+                    // Give the echo canceller a moment to settle before judging the signal.
+                    if (SystemClock.elapsedRealtime() - startedAt < BARGE_IN_SETTLE_MS) continue
+                    var sum = 0.0
+                    for (i in 0 until read) sum += frame[i].toDouble() * frame[i]
+                    val rms = sqrt(sum / read)
+                    peak = maxOf(peak, rms)
+                    sinceLogMs += BARGE_IN_FRAME_MS
+                    if (sinceLogMs >= 1_000) {
+                        Log.d(TAG, "rms peak=${peak.toInt()} threshold=$BARGE_IN_RMS_THRESHOLD")
+                        peak = 0.0
+                        sinceLogMs = 0
+                    }
+                    loudMs = if (rms > BARGE_IN_RMS_THRESHOLD) loudMs + BARGE_IN_FRAME_MS else maxOf(0, loudMs - BARGE_IN_FRAME_MS / 2)
+                    if (loudMs >= BARGE_IN_HOLD_MS) {
+                        if (token.getAndSet(false)) mainHandler.post { onBargeIn(token) }
+                    }
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Barge-in stopped: ${e.message}")
+            } finally {
+                runCatching { record.stop() }
+                record.release()
+                effects.forEach { it.release() }
+            }
+        }
+    }
+
+
+    private fun stopBargeInDetection() {
+        bargeInToken?.set(false)
+        bargeInToken = null
+    }
+
+    /** The user talked over the assistant: shut it up and listen to what they are saying. */
+    private fun onBargeIn(@Suppress("UNUSED_PARAMETER") token: AtomicBoolean) {
+        Log.d(TAG, "Barge-in: user spoke over the assistant")
+        silenceSpeech()
+        startListening()
     }
 
     /**
@@ -119,15 +402,23 @@ class VoiceEngine @Inject constructor(
      */
     fun startListening() {
         if (!SpeechRecognizer.isRecognitionAvailable(context)) {
-            _state.value = VoiceState.Error("El reconocimiento de voz no está disponible en este dispositivo.")
+            val message = "El reconocimiento de voz no está disponible en este teléfono."
+            _state.value = VoiceState.Error(message)
+            cues.play(FeedbackCues.Cue.ERROR)
+            speak(message)
             return
         }
+        activate() // tapping the mic always brings the assistant back after "silencio" or "para"
+        pauseWakeWord()
+        silenceSpeech()
         stopListening()
         val recognizer = SpeechRecognizer.createSpeechRecognizer(context)
         speechRecognizer = recognizer
         recognizer.setRecognitionListener(object : RecognitionListener {
             override fun onReadyForSpeech(params: Bundle?) {
                 _state.value = VoiceState.Listening
+                // The user cannot see the screen: a beep and a buzz say "I'm listening, talk now".
+                cues.play(FeedbackCues.Cue.LISTENING)
             }
 
             override fun onBeginningOfSpeech() = Unit
@@ -136,7 +427,12 @@ class VoiceEngine @Inject constructor(
             override fun onEndOfSpeech() = Unit
 
             override fun onError(error: Int) {
+                Log.w(TAG, "Recognition error $error")
                 _state.value = VoiceState.Idle
+                // One long buzz: the mic closed without a usable answer.
+                cues.play(FeedbackCues.Cue.NO_AUDIO)
+                // Never fail silently: the user cannot see the screen, so say what went wrong.
+                recognitionErrorMessage(error)?.let { speak(it) } ?: resumeWakeWord()
             }
 
             override fun onResults(results: Bundle?) {
@@ -145,7 +441,12 @@ class VoiceEngine @Inject constructor(
                     ?.firstOrNull()
                 _state.value = VoiceState.Idle
                 if (!text.isNullOrBlank()) {
-                    _recognizedSpeech.tryEmit(RecognizedSpeech(text, System.currentTimeMillis()))
+                    // Two quick pulses: "I heard you".
+                    cues.play(FeedbackCues.Cue.HEARD)
+                    dispatchSpeech(text)
+                    resumeWakeWord()
+                } else {
+                    speak(recognitionErrorMessage(SpeechRecognizer.ERROR_NO_MATCH).orEmpty())
                 }
             }
 
@@ -161,6 +462,20 @@ class VoiceEngine @Inject constructor(
         recognizer.startListening(intent)
     }
 
+    /** What to tell the user for a speech-recognizer error code, or null if it should stay silent. */
+    private fun recognitionErrorMessage(error: Int): String? = when (error) {
+        SpeechRecognizer.ERROR_NO_MATCH, SpeechRecognizer.ERROR_SPEECH_TIMEOUT ->
+            "No te escuché. Toca el micrófono o di hola para intentarlo otra vez."
+        SpeechRecognizer.ERROR_NETWORK, SpeechRecognizer.ERROR_NETWORK_TIMEOUT, SpeechRecognizer.ERROR_SERVER ->
+            "No pude reconocer tu voz porque la conexión a internet falló. Intenta de nuevo."
+        SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS ->
+            "Necesito permiso para usar el micrófono. Actívalo en los ajustes de la aplicación."
+        SpeechRecognizer.ERROR_AUDIO -> "Hubo un problema con el micrófono. Intenta de nuevo."
+        // CLIENT and BUSY happen when we cancel or restart the recognizer ourselves: not the user's problem.
+        SpeechRecognizer.ERROR_CLIENT, SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> null
+        else -> "No pude escucharte. Intenta de nuevo."
+    }
+
     fun stopListening() {
         speechRecognizer?.cancel()
         speechRecognizer?.destroy()
@@ -170,7 +485,156 @@ class VoiceEngine @Inject constructor(
         }
     }
 
+    /**
+     * Turns wake-word listening on with [words] (e.g. "hola" and the assistant's name).
+     * Caller must already hold RECORD_AUDIO. Call again to change the words.
+     */
+    fun startWakeWord(words: Collection<String>, openMic: Boolean = false) {
+        wakeWords = words.map(VoiceText::normalize)
+            .filter { it.isNotBlank() }
+            .toSet()
+        this.openMic = openMic
+        if (wakeWords.isEmpty()) {
+            stopWakeWord()
+        } else {
+            resumeWakeWord()
+        }
+    }
+
+    fun stopWakeWord() {
+        wakeWords = emptySet()
+        openMic = false
+        pauseWakeWord()
+    }
+
+    private fun resumeWakeWord(delayMs: Long = 400) {
+        mainHandler.removeCallbacks(wakeRestart)
+        if (wakeWords.isNotEmpty() && _mode.value != AssistantMode.STOPPED) mainHandler.postDelayed(wakeRestart, delayMs)
+    }
+
+    private fun pauseWakeWord() {
+        mainHandler.removeCallbacks(wakeRestart)
+        if (Looper.myLooper() == Looper.getMainLooper()) releaseWakeRecognizer() else mainHandler.post { releaseWakeRecognizer() }
+    }
+
+    private fun releaseWakeRecognizer() {
+        wakeRecognizer?.cancel()
+        wakeRecognizer?.destroy()
+        wakeRecognizer = null
+    }
+
+    private fun listenForWakeWord() {
+        if (wakeWords.isEmpty() || _mode.value == AssistantMode.STOPPED) return
+        val busy = _state.value is VoiceState.Speaking || _state.value is VoiceState.Listening
+        if (busy || phoneIsInCall() || !SpeechRecognizer.isRecognitionAvailable(context)) {
+            resumeWakeWord(if (busy) 800 else 3_000)
+            return
+        }
+        releaseWakeRecognizer()
+        val recognizer = SpeechRecognizer.createSpeechRecognizer(context)
+        wakeRecognizer = recognizer
+        recognizer.setRecognitionListener(object : RecognitionListener {
+            override fun onError(error: Int) {
+                if (wakeRecognizer !== recognizer) return
+                resumeWakeWord(
+                    when (error) {
+                        SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> 5_000L
+                        SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> 1_500L
+                        else -> 300L
+                    },
+                )
+            }
+
+            override fun onResults(results: Bundle?) {
+                if (wakeRecognizer !== recognizer) return
+                val heard = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION).orEmpty()
+                // "silencio" and "para" work without saying "hola" first.
+                if (heard.any { handleControl(it) }) return
+                for (text in heard) {
+                    val end = wakeWordEnd(text) ?: continue
+                    onWakeWordHeard(text.substring(end).trim { !it.isLetterOrDigit() })
+                    return
+                }
+                // Open mic (e.g. the login screen): the user is mid-task, so anything they say is a command.
+                val spoken = if (openMic && _mode.value == AssistantMode.ACTIVE) heard.firstOrNull { it.isNotBlank() } else null
+                if (spoken != null) {
+                    releaseWakeRecognizer()
+                    cues.play(FeedbackCues.Cue.HEARD)
+                    dispatchSpeech(spoken.trim())
+                    resumeWakeWord(1_500)
+                    return
+                }
+                resumeWakeWord()
+            }
+
+            override fun onReadyForSpeech(params: Bundle?) = Unit
+            override fun onBeginningOfSpeech() = Unit
+            override fun onRmsChanged(rmsdB: Float) = Unit
+            override fun onBufferReceived(buffer: ByteArray?) = Unit
+            override fun onEndOfSpeech() = Unit
+            override fun onPartialResults(partialResults: Bundle?) = Unit
+            override fun onEvent(eventType: Int, params: Bundle?) = Unit
+        })
+        recognizer.startListening(
+            Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE, "es-MX")
+                putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
+            },
+        )
+    }
+
+    /** "hola" alone answers "¿En qué te puedo ayudar?"; "hola iniciar sesión" runs the command right away. */
+    private fun onWakeWordHeard(remainder: String) {
+        releaseWakeRecognizer()
+        activate() // "hola" or the assistant's name ends a "silencio"
+        if (remainder.isBlank()) {
+            // Only the wake word: answer, then open the mic for what the user wants.
+            speak(wakePrompt(), listenAfter = true)
+        } else {
+            cues.play(FeedbackCues.Cue.HEARD)
+            dispatchSpeech(remainder)
+            resumeWakeWord(1_500)
+        }
+    }
+
+    /** Index in [raw] right after the first wake word found, or null. [fold] keeps indexes 1:1 with [raw]. */
+    private fun wakeWordEnd(raw: String): Int? {
+        val folded = VoiceText.fold(raw)
+        for (word in wakeWords) {
+            val pattern = word.split(' ').joinToString("\\s+") { Regex.escape(it) }
+            val match = Regex("(?<![\\p{L}\\p{N}])$pattern(?![\\p{L}\\p{N}])").find(folded)
+            if (match != null) return match.range.last + 1
+        }
+        return null
+    }
+
+    /** During a call or a ringing phone the mic belongs to the call: do not listen for "hola". */
+    private fun phoneIsInCall(): Boolean {
+        val audio = context.getSystemService(Context.AUDIO_SERVICE) as? android.media.AudioManager ?: return false
+        return audio.mode == android.media.AudioManager.MODE_IN_CALL ||
+            audio.mode == android.media.AudioManager.MODE_IN_COMMUNICATION ||
+            audio.mode == android.media.AudioManager.MODE_RINGTONE
+    }
+
+    private companion object {
+        const val TAG = "CecapiVoice"
+
+        // Whole phrases only ("para" also appears inside everyday sentences).
+        val SILENCE_PHRASES = setOf("silencio", "espera", "esperame", "callate", "un momento", "un segundo", "pausa")
+        val STOP_PHRASES = setOf("para", "detente", "alto", "basta", "para ya", "ya para", "hasta luego", "adios", "apagate")
+
+        // Barge-in tuning. RMS is on 16-bit PCM (0..32767); normal speech close to the phone is
+        // in the low thousands. Watch "rms peak" in logcat (tag CecapiVoice) to retune per device.
+        const val BARGE_IN_SAMPLE_RATE = 16_000
+        const val BARGE_IN_FRAME_MS = 50
+        const val BARGE_IN_SETTLE_MS = 500L
+        const val BARGE_IN_HOLD_MS = 300
+        const val BARGE_IN_RMS_THRESHOLD = 1_800
+    }
+
     fun release() {
+        stopWakeWord()
         stopListening()
         textToSpeech?.stop()
         textToSpeech?.shutdown()

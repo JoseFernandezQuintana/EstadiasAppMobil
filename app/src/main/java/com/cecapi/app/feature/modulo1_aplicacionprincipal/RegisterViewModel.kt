@@ -1,10 +1,14 @@
 package com.cecapi.app.feature.modulo1_aplicacionprincipal
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.cecapi.app.core.voice.FeedbackCues
 import com.cecapi.app.core.voice.VoiceEngine
+import com.cecapi.app.core.voice.VoiceMessages
 import com.cecapi.app.core.voice.VoiceState
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -28,6 +32,7 @@ data class RegisterUiState(
 @HiltViewModel
 class RegisterViewModel @Inject constructor(
     private val voiceEngine: VoiceEngine,
+    private val cues: FeedbackCues,
     private val sessionRepository: SessionRepository,
 ) : ViewModel() {
 
@@ -44,7 +49,7 @@ class RegisterViewModel @Inject constructor(
     private var voiceTarget = RegisterVoiceTarget.NOMBRE_COMPLETO
 
     init {
-        voiceEngine.speak("Vamos a crear tu cuenta en CECAPI. Di tu nombre completo, o escríbelo abajo.")
+        voiceEngine.speak("Vamos a crear tu cuenta. Di tu nombre completo, o escríbelo abajo.")
         viewModelScope.launch {
             voiceEngine.recognizedSpeech.collect { speech -> onVoiceInput(speech.text.trim()) }
         }
@@ -58,7 +63,7 @@ class RegisterViewModel @Inject constructor(
                 voiceEngine.speak("Ahora di el nombre de usuario que quieres usar.")
             }
             RegisterVoiceTarget.USUARIO -> {
-                onNombreUsuarioChange(texto.replace(" ", "").lowercase())
+                onNombreUsuarioChange(texto.replace(" ", ""))
                 voiceTarget = RegisterVoiceTarget.CONTRASENA
                 voiceEngine.speak("Ahora di tu contraseña.")
             }
@@ -67,7 +72,9 @@ class RegisterViewModel @Inject constructor(
                 voiceTarget = RegisterVoiceTarget.NONE
                 submit()
             }
-            RegisterVoiceTarget.NONE -> Unit
+            RegisterVoiceTarget.NONE -> voiceEngine.speak(
+                "Ya tengo tus datos. Si algo está mal, corrígelo escribiendo en la pantalla.",
+            )
         }
     }
 
@@ -75,12 +82,16 @@ class RegisterViewModel @Inject constructor(
         voiceEngine.startListening()
     }
 
+    fun onMicPermissionDenied() {
+        voiceEngine.speak(VoiceMessages.MIC_DENIED)
+    }
+
     fun onNombreCompletoChange(value: String) {
         _uiState.value = _uiState.value.copy(nombreCompleto = value, errorMessage = null)
     }
 
     fun onNombreUsuarioChange(value: String) {
-        _uiState.value = _uiState.value.copy(nombreUsuario = value, errorMessage = null)
+        _uiState.value = _uiState.value.copy(nombreUsuario = value.uppercase(), errorMessage = null)
     }
 
     fun onContrasenaChange(value: String) {
@@ -96,27 +107,39 @@ class RegisterViewModel @Inject constructor(
             return
         }
         if (state.contrasena.length < 4) {
-            val message = "La contraseña debe tener al menos cuatro caracteres."
+            val message = "La contraseña debe tener al menos cuatro caracteres. Dime otra contraseña."
             _uiState.value = state.copy(errorMessage = message)
-            voiceEngine.speak(message)
+            voiceTarget = RegisterVoiceTarget.CONTRASENA
+            voiceEngine.speak(message, listenAfter = true)
             return
         }
 
         _uiState.value = state.copy(isSubmitting = true, errorMessage = null)
         viewModelScope.launch {
-            when (
-                val result = sessionRepository.register(
+            val outcome = try {
+                sessionRepository.register(
                     nombreUsuario = state.nombreUsuario,
                     contrasena = state.contrasena,
                     nombreCompleto = state.nombreCompleto,
                 )
-            ) {
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.e("CecapiRegister", "register crashed", e)
+                val message = "No se pudo crear la cuenta por un problema del teléfono. Intenta de nuevo."
+                _uiState.value = state.copy(isSubmitting = false, errorMessage = message)
+                voiceEngine.speak(message)
+                return@launch
+            }
+            when (val result = outcome) {
                 is RegisterResult.Success -> {
                     _uiState.value = state.copy(isSubmitting = false)
-                    voiceEngine.speak("Cuenta creada. Bienvenido a CECAPI, ${result.usuario.nombreCompleto}.")
+                    cues.play(FeedbackCues.Cue.SUCCESS)
+                    // No speech here: the Dashboard opens next and gives the personalized welcome.
                     _registerSucceeded.tryEmit(Unit)
                 }
                 RegisterResult.UsernameTaken -> {
+                    cues.play(FeedbackCues.Cue.ERROR)
                     val message = "Ese nombre de usuario ya existe. Di o escribe otro."
                     _uiState.value = state.copy(isSubmitting = false, errorMessage = message, nombreUsuario = "")
                     voiceEngine.speak(message)

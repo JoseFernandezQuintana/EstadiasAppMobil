@@ -15,10 +15,24 @@ import kotlinx.coroutines.flow.Flow
 // ---- Módulo 1: Aplicación Principal Accesible -----------------------------
 // Tables: usuarios, configuracion_usuario, permisos_modulos (see docs/database/schema.sql)
 
+/** Who is signing in. Stored by [codigo] in `usuarios.rol`; anyone who self-registers is a plain [USUARIO]. */
+enum class RolUsuario(val codigo: String) {
+    ADMINISTRADOR("administrador"),
+    DIRECTIVO("directivo"),
+    ALUMNO("alumno"),
+    USUARIO("usuario"),
+    ;
+
+    companion object {
+        fun fromCodigo(codigo: String): RolUsuario = entries.find { it.codigo == codigo } ?: USUARIO
+    }
+}
+
 @Entity(tableName = "usuarios")
 data class UsuarioEntity(
     @PrimaryKey(autoGenerate = true)
     val id: Long = 0,
+    /** Always stored in UPPERCASE so "Jorge", "jorge" and "JORGE" are the same account. */
     @ColumnInfo(name = "nombre_usuario")
     val nombreUsuario: String,
     @ColumnInfo(name = "contrasena_hash")
@@ -27,6 +41,11 @@ data class UsuarioEntity(
     val nombreCompleto: String,
     @ColumnInfo(name = "fecha_registro")
     val fechaRegistro: Long = System.currentTimeMillis(),
+    @ColumnInfo(name = "rol")
+    val rol: String = RolUsuario.USUARIO.codigo,
+    /** Institution or place the person comes from (e.g. "CECAPI"); empty when they signed up on their own. */
+    @ColumnInfo(name = "origen")
+    val origen: String = "",
 )
 
 @Entity(
@@ -79,7 +98,7 @@ data class PermisosModuloEntity(
 
 @Dao
 interface UsuarioDao {
-    @Query("SELECT * FROM usuarios WHERE nombre_usuario = :nombreUsuario LIMIT 1")
+    @Query("SELECT * FROM usuarios WHERE nombre_usuario = :nombreUsuario COLLATE NOCASE LIMIT 1")
     suspend fun findByUsername(nombreUsuario: String): UsuarioEntity?
 
     @Query("SELECT * FROM usuarios WHERE id = :id LIMIT 1")
