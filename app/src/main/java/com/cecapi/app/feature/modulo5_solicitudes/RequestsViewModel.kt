@@ -93,7 +93,11 @@ class RequestsViewModel @Inject constructor(
     }
 
     private fun finalizarSolicitud(plantilla: PlantillaSolicitudEntity, respuestas: Map<String, String>) {
-        val usuario = sessionRepository.currentUser.value ?: return
+        val usuario = sessionRepository.currentUser.value ?: run {
+            // Nobody signed in: say so instead of ignoring the user in silence.
+            voiceEngine.speak(com.cecapi.app.core.voice.VoiceMessages.NEEDS_LOGIN)
+            return
+        }
         viewModelScope.launch {
             val solicitud = repository.generarSolicitud(usuario.id, plantilla, respuestas)
             _uiState.value = _uiState.value.copy(textoGenerado = solicitud.textoFinal)

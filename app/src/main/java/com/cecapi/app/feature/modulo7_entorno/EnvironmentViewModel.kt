@@ -40,7 +40,11 @@ class EnvironmentViewModel @Inject constructor(
     }
 
     fun onPhotoCaptured(imageUri: Uri, rutaImagen: String) {
-        val usuario = sessionRepository.currentUser.value ?: return
+        val usuario = sessionRepository.currentUser.value ?: run {
+            // Nobody signed in: say so instead of ignoring the user in silence.
+            voiceEngine.speak(com.cecapi.app.core.voice.VoiceMessages.NEEDS_LOGIN)
+            return
+        }
         _uiState.value = EnvironmentUiState(isProcessing = true)
         voiceEngine.speak("Analizando el entorno.")
         viewModelScope.launch {
