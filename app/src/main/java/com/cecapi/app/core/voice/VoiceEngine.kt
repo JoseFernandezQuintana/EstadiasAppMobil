@@ -36,6 +36,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import java.util.Locale
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.concurrent.thread
@@ -124,6 +125,8 @@ class VoiceEngine @Inject constructor(
                     }
 
                     override fun onDone(utteranceId: String?) {
+                        // A long text is spoken in parts; only the last one ends the speech.
+                        if (chunksLeft.decrementAndGet() > 0) return
                         stopBargeInDetection()
                         if (_state.value is VoiceState.Speaking) {
                             _state.value = VoiceState.Idle
@@ -135,6 +138,7 @@ class VoiceEngine @Inject constructor(
 
                     @Deprecated("Deprecated in Java")
                     override fun onError(utteranceId: String?) {
+                        chunksLeft.set(0)
                         stopBargeInDetection()
                         listenAfterSpeech = false
                         _state.value = VoiceState.Idle
@@ -147,6 +151,27 @@ class VoiceEngine @Inject constructor(
                 }
             }
         }
+    }
+
+    private val chunksLeft = AtomicInteger(0)
+
+    private fun splitForSpeech(text: String, maxLength: Int = 3500): List<String> {
+        if (text.length <= maxLength) return listOf(text)
+        val parts = mutableListOf<String>()
+        val current = StringBuilder()
+        for (sentence in text.split(Regex("(?<=[.!?…])\\s+"))) {
+            if (current.isNotEmpty() && current.length + sentence.length + 1 > maxLength) {
+                parts.add(current.toString())
+                current.clear()
+            }
+            // A single sentence longer than the limit is cut hard rather than dropped.
+            sentence.chunked(maxLength).forEach { piece ->
+                if (current.isNotEmpty()) current.append(' ')
+                current.append(piece)
+            }
+        }
+        if (current.isNotEmpty()) parts.add(current.toString())
+        return parts
     }
 
     /** Mexican Spanish if the phone has it, otherwise any Spanish, otherwise the phone's own language. */
@@ -173,13 +198,22 @@ class VoiceEngine @Inject constructor(
         speakInternal(text, listenAfter)
     }
 
-    private fun speakInternal(text: String, listenAfter: Boolean) {
+    private fun speakInternal(rawText: String, listenAfter: Boolean) {
+        // Text from an AI or a scanned document may carry markdown or emojis that must not be read aloud.
+        val text = VoiceText.forSpeech(rawText).ifBlank { return }
         pauseWakeWord()
         lastSpoken = text
         listenAfterSpeech = listenAfter
         _state.value = VoiceState.Speaking(text)
         val params = Bundle().apply { putFloat(TextToSpeech.Engine.KEY_PARAM_VOLUME, currentVolume) }
-        textToSpeech?.speak(text, TextToSpeech.QUEUE_FLUSH, params, UUID.randomUUID().toString())
+        // Android's speech engine refuses more than about 4000 characters at once (long AI answers, scanned
+        // documents), so long text goes out in parts, split at sentence ends.
+        val parts = splitForSpeech(text)
+        chunksLeft.set(parts.size)
+        parts.forEachIndexed { index, part ->
+            val mode = if (index == 0) TextToSpeech.QUEUE_FLUSH else TextToSpeech.QUEUE_ADD
+            textToSpeech?.speak(part, mode, params, UUID.randomUUID().toString())
+        }
         startBargeInDetection()
     }
 
@@ -302,6 +336,7 @@ class VoiceEngine @Inject constructor(
     }
 
     private fun silenceSpeech() {
+        chunksLeft.set(0)
         stopBargeInDetection()
         listenAfterSpeech = false
         pendingSpeech.clear()

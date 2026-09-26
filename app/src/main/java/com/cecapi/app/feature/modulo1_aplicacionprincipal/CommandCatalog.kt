@@ -14,7 +14,7 @@ object CommandCatalog {
 
     private const val EVERYWHERE =
         "Estado del teléfono, batería, wifi, hora, fecha, año o mes. Sube el volumen o baja el volumen. " +
-            "Qué notificaciones tengo. Silencio, para que me calle un momento. Para, para detenerme del todo."
+            "Qué notificaciones tengo. Dime más, para profundizar en lo último que respondí. Silencio, para que me calle un momento. Para, para detenerme del todo."
 
     const val HOME =
         "Puedes decir: menú, o el nombre de una opción, como cámara, documentos, personalización o configuración. " +

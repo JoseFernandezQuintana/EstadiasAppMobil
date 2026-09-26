@@ -129,6 +129,11 @@ class DashboardViewModel @Inject constructor(
     }
 
     private fun runCommand(text: String, allowFallback: Boolean = true) {
+        // "dime más": go deeper on the last thing the AI answered.
+        intentFallback.deepQuestionFor(text)?.let { question ->
+            askAi(question, deep = true)
+            return
+        }
         phoneStatusReader.answer(text)?.let { status ->
             voiceEngine.speak(status)
             return
@@ -177,14 +182,28 @@ class DashboardViewModel @Inject constructor(
      * internet, it gets one chance to turn the phrase into a command we know; otherwise we say so.
      */
     private fun notUnderstood(text: String, allowFallback: Boolean) {
-        val resolver = intentFallback.resolver
-        if (allowFallback && resolver != null && isOnline.value) {
-            viewModelScope.launch {
-                val command = runCatching { resolver(text) }.getOrNull()
-                if (command != null) runCommand(command, allowFallback = false) else sayNotUnderstood()
-            }
+        if (allowFallback && intentFallback.resolver != null && isOnline.value) {
+            askAi(text, deep = false)
         } else {
             sayNotUnderstood()
+        }
+    }
+
+    /** Asks the AI backend. It answers with a command to run, or a short answer to read aloud. */
+    private fun askAi(question: String, deep: Boolean) {
+        val resolver = intentFallback.resolver ?: return sayNotUnderstood()
+        viewModelScope.launch {
+            val reply = runCatching { resolver(question, deep) }.getOrNull()
+            val command = reply?.command
+            val answer = reply?.answer
+            when {
+                command != null -> runCommand(command, allowFallback = false)
+                answer != null -> {
+                    intentFallback.lastQuestion = question
+                    voiceEngine.speak(answer + if (reply.hasMore) " Si quieres saber más, di dime más." else "")
+                }
+                else -> sayNotUnderstood()
+            }
         }
     }
 
