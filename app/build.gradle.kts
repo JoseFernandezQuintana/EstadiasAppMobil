@@ -20,7 +20,7 @@ android {
         // Placeholder: point this at YOUR backend proxy, never at api.anthropic.com
         // directly — an Anthropic API key must never ship inside a mobile client.
         // See feature/aiassistant/AiAssistantApi.kt for the expected request/response shape.
-        buildConfigField("String", "AI_PROXY_BASE_URL", "\"https://TU-BACKEND.example.com/api/asistente\"")
+        buildConfigField("String", "AI_PROXY_BASE_URL", "\"http://TU-IP-LOCAL:8000/preguntar\"")
     }
 
     buildTypes {
