@@ -66,7 +66,7 @@ fun CecapiNavGraph(navController: NavHostController = rememberNavController()) {
             AiAssistantScreen()
         }
         composable(CecapiDestinations.DOCUMENT_READER) {
-            DocumentReaderScreen()
+            DocumentReaderScreen(onNavigateToMenu = { navController.popBackStack() })
         }
         composable(CecapiDestinations.REQUESTS) {
             RequestsScreen()
