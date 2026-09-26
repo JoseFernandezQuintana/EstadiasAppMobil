@@ -13,13 +13,10 @@ import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
@@ -80,66 +77,81 @@ fun DocumentReaderScreen(
 
     var imageCapture by remember { mutableStateOf<ImageCapture?>(null) }
 
-    Column(modifier = Modifier.fillMaxSize().padding(24.dp)) {
-        Text("CÁMARA INTELIGENTE", style = CecapiEyebrowStyle, color = CecapiTextMuted)
-        Text(
-            "Leer documentos y texto",
-            style = MaterialTheme.typography.headlineMedium,
-            color = MaterialTheme.colorScheme.onBackground,
-        )
+    // El texto reconocido nunca se muestra: solo se narra por voz. Aquí solo
+    // reflejamos el estado de la lectura para la burbuja de estado.
+    val statusText = when {
+        uiState.errorMessage != null -> uiState.errorMessage
+        uiState.isProcessing -> "Procesando la imagen."
+        uiState.estaLeyendo -> "Leyendo el documento en voz alta."
+        uiState.capturaArmada -> "Toca otra vez para tomar la foto."
+        uiState.parrafos.isNotEmpty() -> "Documento leído."
+        else -> "Apunta la cámara a un documento y toca el botón para capturarlo."
+    }
 
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .aspectRatio(3f / 4f)
-                .padding(top = 16.dp)
-                .clip(RoundedCornerShape(16.dp))
-                .background(CecapiSurfaceElevated),
-            contentAlignment = Alignment.BottomCenter,
-        ) {
-            if (hasCameraPermission) {
-                AndroidView(
-                    modifier = Modifier.fillMaxSize(),
-                    factory = { ctx ->
-                        val previewView = PreviewView(ctx)
-                        val cameraProviderFuture = ProcessCameraProvider.getInstance(ctx)
-                        cameraProviderFuture.addListener({
-                            val cameraProvider = cameraProviderFuture.get()
-                            val preview = Preview.Builder().build().also { p ->
-                                p.setSurfaceProvider(previewView.surfaceProvider)
-                            }
-                            val capture = ImageCapture.Builder().build()
-                            imageCapture = capture
-                            try {
-                                cameraProvider.unbindAll()
-                                cameraProvider.bindToLifecycle(
-                                    lifecycleOwner,
-                                    CameraSelector.DEFAULT_BACK_CAMERA,
-                                    preview,
-                                    capture,
-                                )
-                            } catch (_: Exception) {
-                                // Camera unavailable (emulator without a virtual camera, etc.)
-                            }
-                        }, ContextCompat.getMainExecutor(ctx))
-                        previewView
-                    },
-                )
-            } else {
+    Box(modifier = Modifier.fillMaxSize()) {
+        if (hasCameraPermission) {
+            AndroidView(
+                modifier = Modifier.fillMaxSize(),
+                factory = { ctx ->
+                    val previewView = PreviewView(ctx)
+                    val cameraProviderFuture = ProcessCameraProvider.getInstance(ctx)
+                    cameraProviderFuture.addListener({
+                        val cameraProvider = cameraProviderFuture.get()
+                        val preview = Preview.Builder().build().also { p ->
+                            p.setSurfaceProvider(previewView.surfaceProvider)
+                        }
+                        val capture = ImageCapture.Builder().build()
+                        imageCapture = capture
+                        try {
+                            cameraProvider.unbindAll()
+                            cameraProvider.bindToLifecycle(
+                                lifecycleOwner,
+                                CameraSelector.DEFAULT_BACK_CAMERA,
+                                preview,
+                                capture,
+                            )
+                        } catch (_: Exception) {
+                            // Camera unavailable (emulator without a virtual camera, etc.)
+                        }
+                    }, ContextCompat.getMainExecutor(ctx))
+                    previewView
+                },
+            )
+        } else {
+            Box(modifier = Modifier.fillMaxSize().background(CecapiSurfaceElevated), contentAlignment = Alignment.Center) {
                 Text(
                     "Se necesita permiso de cámara.",
                     color = CecapiTextMuted,
                     modifier = Modifier.padding(16.dp),
                 )
             }
+        }
+
+        Column(modifier = Modifier.fillMaxSize().padding(24.dp)) {
+            Column(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(CecapiSurfaceElevated.copy(alpha = 0.85f))
+                    .padding(horizontal = 16.dp, vertical = 10.dp),
+            ) {
+                Text("CÁMARA INTELIGENTE", style = CecapiEyebrowStyle, color = CecapiTextMuted)
+                Text(
+                    "Leer documentos y texto",
+                    style = MaterialTheme.typography.headlineMedium,
+                    color = MaterialTheme.colorScheme.onBackground,
+                )
+            }
+
+            Spacer(modifier = Modifier.weight(1f))
 
             Box(
                 modifier = Modifier
-                    .padding(bottom = 20.dp)
-                    .size(72.dp)
+                    .align(Alignment.CenterHorizontally)
+                    .size(100.dp)
                     .clip(CircleShape)
                     .background(CecapiAccent)
                     .clickable(enabled = imageCapture != null && !uiState.isProcessing) {
+                        if (!viewModel.onBotonCapturaPresionado()) return@clickable
                         val capture = imageCapture ?: return@clickable
                         val photoFile = File(
                             context.filesDir,
@@ -166,33 +178,21 @@ fun DocumentReaderScreen(
                 contentAlignment = Alignment.Center,
             ) {
                 if (uiState.isProcessing) {
-                    CircularProgressIndicator(color = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(28.dp))
+                    CircularProgressIndicator(color = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(36.dp))
                 } else {
-                    Icon(Icons.Filled.Camera, contentDescription = "Capturar foto", tint = MaterialTheme.colorScheme.onPrimary)
+                    Icon(
+                        Icons.Filled.Camera,
+                        contentDescription = "Capturar foto",
+                        tint = MaterialTheme.colorScheme.onPrimary,
+                        modifier = Modifier.size(40.dp),
+                    )
                 }
             }
-        }
 
-        VoiceCaptionBubble(
-            text = uiState.recognizedText ?: uiState.errorMessage ?: "Apunta la cámara a un documento y toca el botón para capturarlo.",
-            modifier = Modifier.padding(top = 16.dp),
-        )
-
-        if (uiState.recognizedText != null) {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
-                horizontalArrangement = Arrangement.Center,
-            ) {
-                Text(
-                    "\"Leer otra vez\"",
-                    color = CecapiAccent,
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(50))
-                        .clickable { viewModel.onReadAgainRequested() }
-                        .padding(horizontal = 16.dp, vertical = 10.dp),
-                )
-            }
+            VoiceCaptionBubble(
+                text = statusText ?: "",
+                modifier = Modifier.padding(top = 16.dp),
+            )
         }
     }
 }

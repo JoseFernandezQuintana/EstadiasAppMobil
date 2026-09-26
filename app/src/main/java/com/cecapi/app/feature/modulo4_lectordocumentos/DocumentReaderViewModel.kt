@@ -25,6 +25,7 @@ data class DocumentReaderUiState(
     val parrafos: List<String> = emptyList(),
     val parrafoActual: Int = 0,
     val estaLeyendo: Boolean = false,
+    val capturaArmada: Boolean = false,
 )
 
 @HiltViewModel
@@ -51,9 +52,29 @@ class DocumentReaderViewModel @Inject constructor(
         voiceEngine.speak("Cámara inteligente lista. Apunta a un documento y toca capturar para leerlo en voz alta.")
     }
 
+    /**
+     * Toque en el botón de cámara. El primer toque solo anuncia la acción por
+     * voz y "arma" la captura; el segundo toque es el que realmente toma la
+     * foto. Devuelve true cuando el llamador debe disparar la captura.
+     */
+    fun onBotonCapturaPresionado(): Boolean {
+        if (_uiState.value.capturaArmada) {
+            _uiState.value = _uiState.value.copy(capturaArmada = false)
+            return true
+        }
+        _uiState.value = _uiState.value.copy(capturaArmada = true)
+        voiceEngine.speak("Vas a tomar una foto del documento. Toca otra vez para capturarla.")
+        return false
+    }
+
     fun onPhotoCaptured(imageUri: Uri, rutaImagen: String) {
         val usuario = sessionRepository.currentUser.value ?: return
-        _uiState.value = _uiState.value.copy(isProcessing = true, errorMessage = null, estaLeyendo = false)
+        _uiState.value = _uiState.value.copy(
+            isProcessing = true,
+            errorMessage = null,
+            estaLeyendo = false,
+            capturaArmada = false,
+        )
         voiceEngine.speak("Procesando la imagen.")
         viewModelScope.launch {
             when (val outcome = repository.processCapturedPhoto(usuario.id, imageUri, rutaImagen)) {
@@ -87,14 +108,6 @@ class DocumentReaderViewModel @Inject constructor(
                     voiceEngine.speak(message)
                 }
             }
-        }
-    }
-
-    fun onReadAgainRequested() {
-        val state = _uiState.value
-        if (state.parrafos.isNotEmpty()) {
-            leerParrafo(0)
-            state.documentoId?.let { id -> viewModelScope.launch { repository.logLectura(id) } }
         }
     }
 
