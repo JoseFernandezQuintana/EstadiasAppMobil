@@ -1,9 +1,12 @@
 package com.cecapi.app.core.di
 
+import android.content.ContentValues
 import android.content.Context
+import android.database.sqlite.SQLiteDatabase
 import androidx.room.Room
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.cecapi.app.core.data.AppDatabase
+import com.cecapi.app.core.data.MIGRATION_1_2
 import com.cecapi.app.core.util.PasswordHasher
 import com.cecapi.app.feature.modulo3_asistenteinteligente.ConsultaIaDao
 import com.cecapi.app.feature.modulo3_asistenteinteligente.ContextoConversacionDao
@@ -20,8 +23,8 @@ import com.cecapi.app.feature.modulo6_aprendizaje.NivelAprendizajeDao
 import com.cecapi.app.feature.modulo6_aprendizaje.ResultadoEjercicioDao
 import com.cecapi.app.feature.modulo1_aplicacionprincipal.ConfiguracionUsuarioDao
 import com.cecapi.app.feature.modulo1_aplicacionprincipal.PermisosModuloDao
+import com.cecapi.app.feature.modulo1_aplicacionprincipal.RolUsuario
 import com.cecapi.app.feature.modulo1_aplicacionprincipal.UsuarioDao
-import com.cecapi.app.feature.modulo1_aplicacionprincipal.UsuarioEntity
 import com.cecapi.app.feature.modulo5_solicitudes.DatoSolicitudDao
 import com.cecapi.app.feature.modulo5_solicitudes.PlantillaSolicitudDao
 import com.cecapi.app.feature.modulo5_solicitudes.PlantillaSolicitudEntity
@@ -51,6 +54,7 @@ object DatabaseModule {
         @ApplicationContext context: Context,
         databaseProvider: Provider<AppDatabase>,
     ): AppDatabase = Room.databaseBuilder(context, AppDatabase::class.java, "cecapi.db")
+        .addMigrations(MIGRATION_1_2)
         .addCallback(object : androidx.room.RoomDatabase.Callback() {
             override fun onCreate(db: SupportSQLiteDatabase) {
                 super.onCreate(db)
@@ -58,19 +62,61 @@ object DatabaseModule {
                     seedDemoData(databaseProvider.get())
                 }
             }
+
+            // Runs on every open (fresh install and upgrade alike); it only adds the missing accounts.
+            // It is synchronous on purpose: the accounts must exist before the first login attempt,
+            // otherwise the very first "Ingresar" on a fresh install can fail for no visible reason.
+            override fun onOpen(db: SupportSQLiteDatabase) {
+                super.onOpen(db)
+                ensureDemoUsers(db)
+            }
         })
         .build()
 
-    private suspend fun seedDemoData(database: AppDatabase) {
-        val usuarioId = database.usuarioDao().insert(
-            UsuarioEntity(
-                nombreUsuario = "cecapi",
-                contrasenaHash = PasswordHasher.hash("1234"),
-                nombreCompleto = "Usuario CECAPI",
-            ),
-        )
-        if (usuarioId <= 0) return
+    private class DemoUser(
+        val nombreUsuario: String,
+        val contrasena: String,
+        val nombreCompleto: String,
+        val rol: RolUsuario,
+        val origen: String,
+    )
 
+    /**
+     * Demo accounts, one per role. Temporary: real accounts will come from the institution.
+     * CECAPI is the shared test account so testers do not start with a personal one.
+     * The administrator is PEPE (not "PP") because voice recognition writes it that way.
+     */
+    private val demoUsers = listOf(
+        DemoUser("CECAPI", "1234", "Usuario CECAPI", RolUsuario.ADMINISTRADOR, "admin"),
+        DemoUser("PEPE", "1234", "Pepe", RolUsuario.ADMINISTRADOR, "admin"),
+        DemoUser("JORGE", "Hola", "Jorge", RolUsuario.DIRECTIVO, "CECAPI"),
+        DemoUser("JUAN", "1234", "Juan", RolUsuario.ALUMNO, "CECAPI"),
+    )
+
+    private fun ensureDemoUsers(db: SupportSQLiteDatabase) {
+        if (db.isReadOnly) return
+        demoUsers.forEach { demo ->
+            val exists = db.query(
+                "SELECT 1 FROM usuarios WHERE nombre_usuario = ? COLLATE NOCASE LIMIT 1",
+                arrayOf<Any?>(demo.nombreUsuario),
+            ).use { it.moveToFirst() }
+            if (exists) return@forEach
+            db.insert(
+                "usuarios",
+                SQLiteDatabase.CONFLICT_IGNORE,
+                ContentValues().apply {
+                    put("nombre_usuario", demo.nombreUsuario)
+                    put("contrasena_hash", PasswordHasher.hash(demo.contrasena))
+                    put("nombre_completo", demo.nombreCompleto)
+                    put("fecha_registro", System.currentTimeMillis())
+                    put("rol", demo.rol.codigo)
+                    put("origen", demo.origen)
+                },
+            )
+        }
+    }
+
+    private suspend fun seedDemoData(database: AppDatabase) {
         database.plantillaSolicitudDao().insertAll(
             listOf(
                 PlantillaSolicitudEntity(
