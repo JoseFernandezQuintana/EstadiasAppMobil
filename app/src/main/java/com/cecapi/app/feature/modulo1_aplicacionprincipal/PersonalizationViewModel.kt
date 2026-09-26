@@ -8,7 +8,10 @@ import com.cecapi.app.core.voice.DeviceSettings
 import com.cecapi.app.core.voice.FeedbackCues
 import com.cecapi.app.core.voice.VoiceEngine
 import com.cecapi.app.core.voice.VoiceOption
+import com.cecapi.app.core.voice.VoiceText
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
@@ -38,11 +41,77 @@ class PersonalizationViewModel @Inject constructor(
     val vibrationCues: StateFlow<Boolean> = deviceSettings.vibrationCues.stateIn(viewModelScope, SharingStarted.Eagerly, true)
     val vibrationLevel: StateFlow<Int> = deviceSettings.vibrationLevel.stateIn(viewModelScope, SharingStarted.Eagerly, 2)
 
+    private val _back = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    val back: SharedFlow<Unit> = _back
+
     init {
+        viewModelScope.launch {
+            voiceEngine.recognizedSpeech.collect { speech -> onSpeech(speech.text) }
+        }
         voiceEngine.speak(
             "Personalización. Aquí eliges mi voz, cómo te llamo, cómo me llamas y cómo se sienten los avisos. " +
-                "Mantén presionado cualquier control para que te explique para qué sirve.",
+                "Mantén presionado cualquier control para que te explique para qué sirve. " +
+                CommandCatalog.hint("personalización"),
+            listenAfter = true,
         )
+    }
+
+    /** The commands this screen answers; each one does what the matching control on screen does. */
+    private fun onSpeech(spoken: String) {
+        val text = VoiceText.normalize(spoken)
+        fun has(vararg words: String) = words.any { it in text }
+        val newAssistantName = ASSISTANT_NAME.find(spoken)?.groupValues?.get(1)
+        val newUserName = USER_NAME.find(spoken)?.groupValues?.get(1)
+        when {
+            CommandCatalog.isRequest(spoken) -> voiceEngine.speak(CommandCatalog.PERSONALIZATION, listenAfter = true)
+            newAssistantName != null -> onAssistantNameSaved(cleanName(newAssistantName))
+            newUserName != null -> onPreferredNameSaved(cleanName(newUserName))
+            has("usted") -> onAddressStyleChosen(AddressStyle.USTED)
+            has("de tu", "tutea") -> onAddressStyleChosen(AddressStyle.TU)
+            has("voz anterior") -> cycleVoice(-1)
+            has("otra voz", "siguiente voz", "cambia la voz", "cambiar la voz", "cambia de voz") -> cycleVoice(1)
+            has("prueba de voz", "probar voz", "prueba la voz", "escuchate", "di algo") -> onTestVoice()
+            has("mas rapido", "mas veloz", "acelera", "habla mas rapido") -> onSpeechRateChanged((speechRate.value + 0.25f).coerceIn(0.5f, 2.0f))
+            has("mas lento", "mas despacio", "despacio", "habla mas lento") -> onSpeechRateChanged((speechRate.value - 0.25f).coerceIn(0.5f, 2.0f))
+            has("mas grave", "voz grave", "mas bajo") -> onPitchChanged((pitch.value - 0.25f).coerceIn(0.5f, 2.0f))
+            has("mas agudo", "voz aguda", "mas alto") -> onPitchChanged((pitch.value + 0.25f).coerceIn(0.5f, 2.0f))
+            has("vibracion") && has("suave") -> onVibrationLevelChanged(1)
+            has("vibracion") && has("fuerte") -> onVibrationLevelChanged(3)
+            has("vibracion") && has("normal") -> onVibrationLevelChanged(2)
+            has("vibracion") && onOff(text) != null -> onVibrationCuesChanged(onOff(text) == true)
+            has("sonido") && onOff(text) != null -> onSoundCuesChanged(onOff(text) == true)
+            has("atras", "volver", "salir", "menu", "regresa") -> _back.tryEmit(Unit)
+            else -> {
+                cues.play(FeedbackCues.Cue.NOT_UNDERSTOOD)
+                voiceEngine.speak("No entendí. " + CommandCatalog.hint("personalización"), listenAfter = true)
+            }
+        }
+    }
+
+    /** "Desactiva" contains "activa", so the negative words are checked first. */
+    private fun onOff(text: String): Boolean? = when {
+        listOf("desactiv", "apaga", "quita", "sin ", "no quiero").any { it in text } -> false
+        listOf("activ", "enciende", "prende", "pon ", "quiero").any { it in text } -> true
+        else -> null
+    }
+
+    private fun cleanName(raw: String): String =
+        raw.trim().trimEnd('.', ',', '!', '?').replaceFirstChar { it.uppercase() }
+
+    /** Moves to the next (or, with -1, the previous) Spanish voice the phone has. */
+    private fun cycleVoice(step: Int) {
+        val options = voices()
+        if (options.isEmpty()) {
+            voiceEngine.speak("No encontré otras voces en español en este teléfono.")
+            return
+        }
+        val current = options.indexOfFirst { it.name == voiceName.value }
+        onVoiceChosen(options[(current + step).mod(options.size)].name)
+    }
+
+    /** Call from the header button: reads out this screen's commands. */
+    fun onCommandsRequested() {
+        voiceEngine.speak(CommandCatalog.PERSONALIZATION, listenAfter = true)
     }
 
     /** The phone's Spanish voices; empty until the speech engine has started, so the screen asks again. */
@@ -140,5 +209,19 @@ class PersonalizationViewModel @Inject constructor(
     fun onTestCue(cue: FeedbackCues.Cue, description: String) {
         cues.play(cue)
         voiceEngine.speak(description)
+    }
+
+    private companion object {
+        // "llámate Luna", "te llamas Luna", "tu nombre es Luna"
+        val ASSISTANT_NAME = Regex(
+            "(?:ll[aá]mate|te llam(?:as|es)|tu nombre (?:es|ser[aá]))\\s+(?:como\\s+)?(.+)",
+            RegexOption.IGNORE_CASE,
+        )
+
+        // "llámame Ana", "me llamo Ana", "mi nombre es Ana"
+        val USER_NAME = Regex(
+            "(?:ll[aá]mame|me llamo|mi nombre es|que me llames)\\s+(?:como\\s+)?(.+)",
+            RegexOption.IGNORE_CASE,
+        )
     }
 }

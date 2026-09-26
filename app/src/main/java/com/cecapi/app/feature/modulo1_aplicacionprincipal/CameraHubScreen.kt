@@ -1,6 +1,7 @@
 package com.cecapi.app.feature.modulo1_aplicacionprincipal
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -16,9 +17,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.TextFields
+import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -28,6 +29,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
@@ -38,6 +40,8 @@ import com.cecapi.app.core.navigation.CecapiDestinations
 import com.cecapi.app.core.theme.CecapiEyebrowStyle
 import com.cecapi.app.core.theme.CecapiSurface
 import com.cecapi.app.core.theme.CecapiTextMuted
+import com.cecapi.app.core.ui.ScreenTopBar
+import com.cecapi.app.core.ui.SuggestionChip
 import com.cecapi.app.core.ui.voiceHint
 import com.cecapi.app.core.voice.DeviceSettings
 import com.cecapi.app.core.voice.FeedbackCues
@@ -59,7 +63,7 @@ import javax.inject.Inject
 class CameraHubViewModel @Inject constructor(
     private val voiceEngine: VoiceEngine,
     private val cues: FeedbackCues,
-    deviceSettings: DeviceSettings,
+    private val deviceSettings: DeviceSettings,
 ) : ViewModel() {
 
     private val _routes = MutableSharedFlow<String>(extraBufferCapacity = 1)
@@ -71,14 +75,17 @@ class CameraHubViewModel @Inject constructor(
     // Stays alive under the text reader or the environment screen; ignore speech meant for them.
     private var screenActive = false
 
+    // True once the person has left for a camera mode, so coming back is announced.
+    private var cameFromMode = false
+
     init {
         viewModelScope.launch {
             val style = deviceSettings.addressStyle.first()
             voiceEngine.speak(
                 style.pick(
-                    "Cámara. ¿Quieres que lea un texto o que describa lo que hay enfrente?",
-                    "Cámara. ¿Desea que lea un texto o que describa lo que hay enfrente?",
-                ),
+                    "Cámara. ¿Quieres que lea un texto o que describa lo que hay enfrente? ",
+                    "Cámara. ¿Desea que lea un texto o que describa lo que hay enfrente? ",
+                ) + CommandCatalog.hint("cámara"),
                 listenAfter = true,
             )
         }
@@ -88,14 +95,24 @@ class CameraHubViewModel @Inject constructor(
     }
 
     fun setScreenActive(active: Boolean) {
+        val wasActive = screenActive
         screenActive = active
+        if (active && !wasActive && cameFromMode) {
+            cameFromMode = false
+            voiceEngine.speak("Cámara. Di leer texto, o qué hay enfrente. " + CommandCatalog.hint("cámara"), listenAfter = true)
+        }
     }
 
     fun openTextReader() = open(CecapiDestinations.DOCUMENT_READER, "Abriendo la cámara para leer texto.")
 
     fun openEnvironment() = open(CecapiDestinations.ENVIRONMENT, "Abriendo el asistente del entorno.")
 
+    fun onCommandsRequested() {
+        voiceEngine.speak(CommandCatalog.CAMERA, listenAfter = true)
+    }
+
     private fun open(route: String, speech: String) {
+        cameFromMode = true
         cues.play(FeedbackCues.Cue.NAVIGATE)
         voiceEngine.speak(speech)
         _routes.tryEmit(route)
@@ -104,12 +121,16 @@ class CameraHubViewModel @Inject constructor(
     private fun onSpeech(spoken: String) {
         val text = VoiceText.normalize(spoken)
         when {
+            CommandCatalog.isRequest(spoken) -> onCommandsRequested()
             listOf("atras", "volver", "regresa", "menu", "inicio").any { it in text } -> _back.tryEmit(Unit)
             listOf("enfrente", "entorno", "descri", "alrededor", "que hay").any { it in text } -> openEnvironment()
             listOf("texto", "leer", "lee", "documento", "letra", "papel").any { it in text } -> openTextReader()
             else -> {
                 cues.play(FeedbackCues.Cue.NOT_UNDERSTOOD)
-                voiceEngine.speak("No entendí. Di leer texto, o describir lo que hay enfrente.", listenAfter = true)
+                voiceEngine.speak(
+                    "No entendí. Di leer texto, o describir lo que hay enfrente. " + CommandCatalog.hint("cámara"),
+                    listenAfter = true,
+                )
             }
         }
     }
@@ -132,54 +153,67 @@ fun CameraHubScreen(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 24.dp, vertical = 16.dp),
+            .padding(horizontal = 16.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onBack, modifier = Modifier.heightIn(min = 56.dp)) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver", tint = CecapiTextMuted)
-            }
-            Column(modifier = Modifier.padding(start = 4.dp)) {
-                Text("MENÚ", style = CecapiEyebrowStyle, color = CecapiTextMuted)
-                Text("Cámara", style = MaterialTheme.typography.headlineLarge, color = MaterialTheme.colorScheme.onBackground)
-            }
-        }
+        ScreenTopBar(
+            eyebrow = "MENÚ",
+            title = "Cámara",
+            onBack = onBack,
+            onCommands = viewModel::onCommandsRequested,
+        )
         Text(
             "¿Qué quieres hacer con la cámara?",
-            style = MaterialTheme.typography.bodyLarge,
-            color = CecapiTextMuted,
+            style = MaterialTheme.typography.headlineSmall,
+            color = MaterialTheme.colorScheme.onBackground,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
         )
         ModeCard(
+            icon = Icons.Filled.TextFields,
             title = "Leer texto",
             subtitle = "Lee en voz alta documentos, carteles y etiquetas",
+            example = "Di: leer texto",
             accent = Color(0xFF4ADE80),
             help = "Leer texto. Apunta la cámara a un papel, un cartel o una etiqueta y te lo leo en voz alta. " +
                 "Toca dos veces para abrir.",
             onClick = viewModel::openTextReader,
         )
         ModeCard(
-            title = "Describir lo que hay enfrente",
+            icon = Icons.Filled.Visibility,
+            title = "Qué hay enfrente",
             subtitle = "Te cuenta qué objetos y cosas ve la cámara",
+            example = "Di: qué hay enfrente",
             accent = Color(0xFFFB923C),
-            help = "Describir lo que hay enfrente. Apunta la cámara y te digo qué objetos veo. Toca dos veces para abrir.",
+            help = "Qué hay enfrente. Apunta la cámara y te digo qué objetos veo. Toca dos veces para abrir.",
             onClick = viewModel::openEnvironment,
         )
-        Text(
-            "También puedes decir: leer texto, o describir lo que hay enfrente.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = CecapiTextMuted,
-        )
+        Text("PUEDES DECIR", style = CecapiEyebrowStyle, color = CecapiTextMuted, modifier = Modifier.padding(horizontal = 8.dp))
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(horizontal = 8.dp)) {
+            SuggestionChip(label = "leer texto", onClick = viewModel::openTextReader)
+            SuggestionChip(label = "qué hay enfrente", onClick = viewModel::openEnvironment)
+            SuggestionChip(label = "lista de comandos", onClick = viewModel::onCommandsRequested)
+        }
     }
 }
 
 @Composable
-private fun ModeCard(title: String, subtitle: String, accent: Color, help: String, onClick: () -> Unit) {
+private fun ModeCard(
+    icon: ImageVector,
+    title: String,
+    subtitle: String,
+    example: String,
+    accent: Color,
+    help: String,
+    onClick: () -> Unit,
+) {
+    val shape = RoundedCornerShape(28.dp)
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .heightIn(min = 140.dp)
-            .clip(RoundedCornerShape(24.dp))
+            .heightIn(min = 150.dp)
+            .clip(shape)
             .background(CecapiSurface)
+            .border(2.dp, accent.copy(alpha = 0.55f), shape)
             .clickable(onClick = onClick)
             .semantics { contentDescription = help }
             .voiceHint(help)
@@ -188,14 +222,19 @@ private fun ModeCard(title: String, subtitle: String, accent: Color, help: Strin
         horizontalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         Box(
-            modifier = Modifier.size(64.dp).clip(CircleShape).background(accent.copy(alpha = 0.18f)),
+            modifier = Modifier
+                .size(72.dp)
+                .clip(CircleShape)
+                .background(accent.copy(alpha = 0.18f))
+                .border(2.dp, accent, CircleShape),
             contentAlignment = Alignment.Center,
         ) {
-            Box(modifier = Modifier.size(20.dp).clip(CircleShape).background(accent))
+            Icon(icon, contentDescription = null, tint = accent, modifier = Modifier.size(40.dp))
         }
         Column(modifier = Modifier.weight(1f)) {
             Text(title, style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.onBackground)
             Text(subtitle, style = MaterialTheme.typography.bodyLarge, color = CecapiTextMuted, modifier = Modifier.padding(top = 4.dp))
+            Text(example, style = MaterialTheme.typography.bodyMedium, color = accent, modifier = Modifier.padding(top = 8.dp))
         }
     }
 }

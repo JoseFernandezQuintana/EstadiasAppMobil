@@ -2,66 +2,57 @@ package com.cecapi.app.feature.modulo4_lectordocumentos
 
 import android.Manifest
 import android.content.pm.PackageManager
-import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageCapture
-import androidx.camera.core.ImageCaptureException
-import androidx.camera.core.Preview
-import androidx.camera.lifecycle.ProcessCameraProvider
-import androidx.camera.view.PreviewView
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Camera
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Replay
+import androidx.compose.material.icons.filled.SkipNext
+import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.cecapi.app.core.theme.CecapiAccent
-import com.cecapi.app.core.theme.CecapiEyebrowStyle
-import com.cecapi.app.core.theme.CecapiSurfaceElevated
-import com.cecapi.app.core.theme.CecapiTextMuted
+import com.cecapi.app.core.theme.CecapiBackground
+import com.cecapi.app.core.ui.ScreenTopBar
+import com.cecapi.app.core.ui.CameraViewfinder
+import com.cecapi.app.core.ui.CaptureButton
+import com.cecapi.app.core.ui.FramingGuide
+import com.cecapi.app.core.ui.SuggestionChip
+import com.cecapi.app.core.ui.TopAction
+import com.cecapi.app.core.ui.capturePhoto
 import com.cecapi.app.core.ui.VoiceCaptionBubble
-import kotlinx.coroutines.launch
-import java.io.File
 
 @Composable
 fun DocumentReaderScreen(
+    onBack: () -> Unit,
+    onOpen: (String) -> Unit,
     viewModel: DocumentReaderViewModel = hiltViewModel(),
 ) {
     val context = LocalContext.current
-    val lifecycleOwner = LocalLifecycleOwner.current
-    val coroutineScope = rememberCoroutineScope()
     val uiState by viewModel.uiState.collectAsState()
 
     var hasCameraPermission by remember {
@@ -72,7 +63,10 @@ fun DocumentReaderScreen(
     }
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
-    ) { granted -> hasCameraPermission = granted }
+    ) { granted ->
+        hasCameraPermission = granted
+        if (!granted) viewModel.onCameraPermissionDenied()
+    }
 
     LaunchedEffect(Unit) {
         if (!hasCameraPermission) permissionLauncher.launch(Manifest.permission.CAMERA)
@@ -80,119 +74,123 @@ fun DocumentReaderScreen(
 
     var imageCapture by remember { mutableStateOf<ImageCapture?>(null) }
 
-    Column(modifier = Modifier.fillMaxSize().padding(24.dp)) {
-        Text("CÁMARA INTELIGENTE", style = CecapiEyebrowStyle, color = CecapiTextMuted)
-        Text(
-            "Leer documentos y texto",
-            style = MaterialTheme.typography.headlineMedium,
-            color = MaterialTheme.colorScheme.onBackground,
+    val takePhoto: () -> Unit = {
+        val capture = imageCapture
+        if (capture == null) {
+            viewModel.onCaptureFailed()
+        } else {
+            capture.capturePhoto(
+                context = context,
+                folder = "cecapi_docs",
+                onFailed = viewModel::onCaptureFailed,
+            ) { uri, path -> viewModel.onPhotoCaptured(uri, path) }
+        }
+    }
+
+    LaunchedEffect(Unit) { viewModel.captureRequests.collect { takePhoto() } }
+    LaunchedEffect(Unit) { viewModel.back.collect { onBack() } }
+    LaunchedEffect(Unit) { viewModel.routes.collect(onOpen) }
+
+    // El texto reconocido nunca se muestra: solo se narra por voz. Aquí solo
+    // reflejamos el estado de la lectura para la burbuja de estado.
+    val statusText = when {
+        uiState.errorMessage != null -> uiState.errorMessage
+        uiState.isProcessing -> "Procesando la imagen."
+        uiState.estaLeyendo -> "Leyendo el párrafo ${uiState.parrafoActual + 1} de ${uiState.parrafos.size}."
+        uiState.capturaArmada -> "Toca otra vez para tomar la foto."
+        uiState.parrafos.isNotEmpty() -> "Lectura en pausa. Di continúa, repite o toma otra foto."
+        else -> "Apunta la cámara a un papel, un cartel o una etiqueta y di toma la foto."
+    }
+    val hayDocumento = uiState.parrafos.isNotEmpty()
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        CameraViewfinder(
+            hasPermission = hasCameraPermission,
+            onReady = { imageCapture = it },
+            modifier = Modifier.fillMaxSize(),
         )
 
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .aspectRatio(3f / 4f)
-                .padding(top = 16.dp)
-                .clip(RoundedCornerShape(16.dp))
-                .background(CecapiSurfaceElevated),
-            contentAlignment = Alignment.BottomCenter,
-        ) {
-            if (hasCameraPermission) {
-                AndroidView(
-                    modifier = Modifier.fillMaxSize(),
-                    factory = { ctx ->
-                        val previewView = PreviewView(ctx)
-                        val cameraProviderFuture = ProcessCameraProvider.getInstance(ctx)
-                        cameraProviderFuture.addListener({
-                            val cameraProvider = cameraProviderFuture.get()
-                            val preview = Preview.Builder().build().also {
-                                it.setSurfaceProvider(previewView.surfaceProvider)
-                            }
-                            val capture = ImageCapture.Builder().build()
-                            imageCapture = capture
-                            try {
-                                cameraProvider.unbindAll()
-                                cameraProvider.bindToLifecycle(
-                                    lifecycleOwner,
-                                    CameraSelector.DEFAULT_BACK_CAMERA,
-                                    preview,
-                                    capture,
-                                )
-                            } catch (_: Exception) {
-                                // Camera unavailable (emulator without a virtual camera, etc.)
-                            }
-                        }, ContextCompat.getMainExecutor(ctx))
-                        previewView
-                    },
-                )
-            } else {
-                Text(
-                    "Se necesita permiso de cámara.",
-                    color = CecapiTextMuted,
-                    modifier = Modifier.padding(16.dp),
-                )
-            }
-
-            Box(
+        if (hasCameraPermission && !hayDocumento) {
+            FramingGuide(
                 modifier = Modifier
-                    .padding(bottom = 20.dp)
-                    .size(72.dp)
-                    .clip(CircleShape)
-                    .background(CecapiAccent)
-                    .clickable(enabled = imageCapture != null && !uiState.isProcessing) {
-                        val capture = imageCapture ?: return@clickable
-                        val photoFile = File(
-                            context.filesDir,
-                            "cecapi_docs/scan_${System.currentTimeMillis()}.jpg",
-                        ).apply { parentFile?.mkdirs() }
-                        val outputOptions = ImageCapture.OutputFileOptions.Builder(photoFile).build()
-                        capture.takePicture(
-                            outputOptions,
-                            ContextCompat.getMainExecutor(context),
-                            object : ImageCapture.OnImageSavedCallback {
-                                override fun onImageSaved(output: ImageCapture.OutputFileResults) {
-                                    val uri = output.savedUri ?: Uri.fromFile(photoFile)
-                                    coroutineScope.launch {
-                                        viewModel.onPhotoCaptured(uri, photoFile.absolutePath)
-                                    }
-                                }
-
-                                override fun onError(exception: ImageCaptureException) {
-                                    // Surfaced to the user via the ViewModel's own error path on failure.
-                                }
-                            },
-                        )
-                    },
-                contentAlignment = Alignment.Center,
-            ) {
-                if (uiState.isProcessing) {
-                    CircularProgressIndicator(color = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(28.dp))
-                } else {
-                    Icon(Icons.Filled.Camera, contentDescription = "Capturar foto", tint = MaterialTheme.colorScheme.onPrimary)
-                }
-            }
+                    .align(Alignment.Center)
+                    .fillMaxWidth(0.8f)
+                    .aspectRatio(3f / 4f),
+            )
         }
 
-        VoiceCaptionBubble(
-            text = uiState.recognizedText ?: uiState.errorMessage ?: "Apunta la cámara a un documento y toca el botón para capturarlo.",
-            modifier = Modifier.padding(top = 16.dp),
-        )
+        Column(
+            modifier = Modifier.fillMaxSize().padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            ScreenTopBar(
+                eyebrow = "CÁMARA",
+                title = "Leer texto",
+                onBack = onBack,
+                onCommands = viewModel::onCommandsRequested,
+            )
 
-        if (uiState.recognizedText != null) {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
-                horizontalArrangement = Arrangement.Center,
-            ) {
-                Text(
-                    "\"Leer otra vez\"",
-                    color = CecapiAccent,
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(50))
-                        .clickable { viewModel.onReadAgainRequested() }
-                        .padding(horizontal = 16.dp, vertical = 10.dp),
-                )
+            Spacer(modifier = Modifier.weight(1f))
+
+            VoiceCaptionBubble(text = statusText ?: "")
+
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
+                SuggestionChip(label = "toma la foto", onClick = viewModel::pedirCaptura)
             }
+
+            if (hayDocumento) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(24.dp))
+                        .background(CecapiBackground.copy(alpha = 0.82f))
+                        .padding(vertical = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                ) {
+                    TopAction(
+                        icon = Icons.Filled.Replay,
+                        label = "Repetir",
+                        help = "Repetir. Lee el documento otra vez desde el principio.",
+                        onClick = viewModel::repetirLectura,
+                    )
+                    TopAction(
+                        icon = Icons.Filled.SkipPrevious,
+                        label = "Anterior",
+                        help = "Párrafo anterior. Vuelve un párrafo atrás.",
+                        onClick = viewModel::anteriorParrafo,
+                    )
+                    if (uiState.estaLeyendo) {
+                        TopAction(
+                            icon = Icons.Filled.Pause,
+                            label = "Pausa",
+                            help = "Pausa. Detiene la lectura hasta que digas continúa.",
+                            onClick = viewModel::pausarLectura,
+                        )
+                    } else {
+                        TopAction(
+                            icon = Icons.Filled.PlayArrow,
+                            label = "Seguir",
+                            help = "Seguir. Continúa leyendo el párrafo donde te quedaste.",
+                            onClick = viewModel::continuarLectura,
+                        )
+                    }
+                    TopAction(
+                        icon = Icons.Filled.SkipNext,
+                        label = "Siguiente",
+                        help = "Párrafo siguiente. Salta al siguiente párrafo.",
+                        onClick = viewModel::siguienteParrafo,
+                    )
+                }
+            }
+
+            CaptureButton(
+                processing = uiState.isProcessing,
+                enabled = imageCapture != null && !uiState.isProcessing,
+                help = "Botón de captura. Tócalo para prepararte y tócalo otra vez para tomar la foto. " +
+                    "También puedes decir: toma la foto.",
+                onClick = { if (viewModel.onBotonCapturaPresionado()) takePhoto() },
+                modifier = Modifier.align(Alignment.CenterHorizontally),
+            )
         }
     }
 }

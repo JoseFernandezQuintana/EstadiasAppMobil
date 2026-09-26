@@ -6,6 +6,7 @@ import com.cecapi.app.core.util.VolumeControl
 import com.cecapi.app.core.voice.DeviceSettings
 import com.cecapi.app.core.voice.FeedbackCues
 import com.cecapi.app.core.voice.VoiceEngine
+import com.cecapi.app.core.voice.VoiceText
 import com.cecapi.app.notifications.NotificationAccess
 import com.cecapi.app.service.BackgroundListening
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -42,11 +43,56 @@ class SettingsViewModel @Inject constructor(
     private val _loggedOut = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     val loggedOut: SharedFlow<Unit> = _loggedOut
 
+    private val _back = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    val back: SharedFlow<Unit> = _back
+
+    // Turning listening outside the app on needs a permission the screen asks for, so the screen does the switching.
+    private val _listenOutsideRequests = MutableSharedFlow<Boolean>(extraBufferCapacity = 1)
+    val listenOutsideRequests: SharedFlow<Boolean> = _listenOutsideRequests
+
     init {
+        viewModelScope.launch {
+            voiceEngine.recognizedSpeech.collect { speech -> onSpeech(speech.text) }
+        }
         voiceEngine.speak(
             "Configuración. Aquí están el volumen, las notificaciones, escuchar fuera de la aplicación y tu cuenta. " +
-                "Mantén presionado cualquier control para que te explique para qué sirve.",
+                "Mantén presionado cualquier control para que te explique para qué sirve. " +
+                CommandCatalog.hint("configuración"),
+            listenAfter = true,
         )
+    }
+
+    /**
+     * The commands this screen answers. Volume and anything that names notifications are global commands
+     * (they never reach here), so the notification switch is worded as "avisos".
+     */
+    private fun onSpeech(spoken: String) {
+        val text = VoiceText.normalize(spoken)
+        fun has(vararg words: String) = words.any { it in text }
+        val enable = when {
+            listOf("desactiv", "apaga", "quita", "sin ", "no quiero").any { it in text } -> false
+            listOf("activ", "enciende", "prende", "pon ", "quiero").any { it in text } -> true
+            else -> null
+        }
+        when {
+            CommandCatalog.isRequest(spoken) -> voiceEngine.speak(CommandCatalog.SETTINGS, listenAfter = true)
+            has("cerrar sesion", "cierra sesion", "cierra mi sesion", "salir de la cuenta") ->
+                if (currentUser.value != null) onLogout() else voiceEngine.speak("No hay una sesión iniciada.", listenAfter = true)
+            has("fuera de la app", "fuera de la aplicacion", "segundo plano") && enable != null ->
+                _listenOutsideRequests.tryEmit(enable)
+            has("modo simple") && enable != null -> onSimpleModeChanged(enable)
+            has("aviso") && enable != null -> onAnnounceNotificationsChanged(enable)
+            has("atras", "volver", "salir", "menu", "regresa") -> _back.tryEmit(Unit)
+            else -> {
+                cues.play(FeedbackCues.Cue.NOT_UNDERSTOOD)
+                voiceEngine.speak("No entendí. " + CommandCatalog.hint("configuración"), listenAfter = true)
+            }
+        }
+    }
+
+    /** Call from the header button: reads out this screen's commands. */
+    fun onCommandsRequested() {
+        voiceEngine.speak(CommandCatalog.SETTINGS, listenAfter = true)
     }
 
     fun currentVolumePercent(): Int = volumeControl.percent()

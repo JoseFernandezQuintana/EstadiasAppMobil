@@ -54,6 +54,7 @@ import com.cecapi.app.core.theme.CecapiEyebrowStyle
 import com.cecapi.app.core.theme.CecapiSurface
 import com.cecapi.app.core.theme.CecapiSurfaceElevated
 import com.cecapi.app.core.theme.CecapiTextMuted
+import com.cecapi.app.core.ui.ScreenTopBar
 import com.cecapi.app.core.ui.voiceHint
 import kotlin.math.roundToInt
 
@@ -93,6 +94,17 @@ fun SettingsScreen(
         viewModel.onListenOutsideAppChanged(true)
     }
 
+    // The switch and the voice command ("activa escuchar fuera de la aplicación") do the same thing.
+    val changeListenOutside: (Boolean) -> Unit = { enabled ->
+        if (enabled && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+        } else {
+            viewModel.onListenOutsideAppChanged(enabled)
+        }
+    }
+    LaunchedEffect(Unit) { viewModel.listenOutsideRequests.collect { changeListenOutside(it) } }
+    LaunchedEffect(Unit) { viewModel.back.collect { onBack() } }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -100,19 +112,12 @@ fun SettingsScreen(
             .padding(horizontal = 24.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onBack, modifier = Modifier.heightIn(min = 56.dp)) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver", tint = CecapiTextMuted)
-            }
-            Column(modifier = Modifier.padding(start = 4.dp)) {
-                Text("MENÚ", style = CecapiEyebrowStyle, color = CecapiTextMuted)
-                Text(
-                    "Configuración",
-                    style = MaterialTheme.typography.headlineLarge,
-                    color = MaterialTheme.colorScheme.onBackground,
-                )
-            }
-        }
+        ScreenTopBar(
+            eyebrow = "MENÚ",
+            title = "Configuración",
+            onBack = onBack,
+            onCommands = viewModel::onCommandsRequested,
+        )
 
         Section("VOLUMEN", "Qué tan fuerte se oye todo en el teléfono") {
             SliderRow(
@@ -167,13 +172,7 @@ fun SettingsScreen(
                 label = "Escuchar fuera de la aplicación",
                 description = "Muestra un aviso fijo mientras escucha. Di \"para\" para detenerlo",
                 checked = listenOutsideApp,
-                onChange = { enabled ->
-                    if (enabled && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                        notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
-                    } else {
-                        viewModel.onListenOutsideAppChanged(enabled)
-                    }
-                },
+                onChange = changeListenOutside,
                 help = "Escuchar fuera de la aplicación. Sigo atento a la palabra hola o a mi nombre aunque cierres " +
                     "la aplicación. Mientras tanto verás un aviso fijo, y puedes detenerme diciendo para. " +
                     "Gasta más batería.",

@@ -12,6 +12,12 @@ object CommandCatalog {
 
     fun isRequest(spoken: String): Boolean = VoiceText.normalize(spoken).let { text -> requestPhrases.any { it in text } }
 
+    /**
+     * Said right after a screen introduces itself, so the person knows every screen has its own list.
+     * [module] is how the screen is called aloud: "cámara", "personalización"...
+     */
+    fun hint(module: String): String = "Di lista de comandos de $module para escuchar lo que puedes decir."
+
     private const val EVERYWHERE =
         "Estado del teléfono, batería, wifi, hora, fecha, año o mes. Sube el volumen o baja el volumen. " +
             "Qué notificaciones tengo. Dime más, para profundizar en lo último que respondí. Silencio, para que me calle un momento. Para, para detenerme del todo."
@@ -29,4 +35,47 @@ object CommandCatalog {
     const val LOGIN =
         "En el inicio de sesión puedes decir: usuario, y luego tu usuario. Contraseña, y luego tu contraseña. " +
             "También todo junto: usuario pepe, contraseña 1234. Ingresar. Crear cuenta. Cancelar, para corregir."
+
+    const val CAMERA =
+        "En la cámara puedes decir: leer texto, para leer un papel, un cartel o una etiqueta. " +
+            "Qué hay enfrente, para que te describa lo que ve la cámara. Atrás, para volver al menú. " +
+            "Lista de comandos, para repetir esta lista. " + EVERYWHERE
+
+    const val READER =
+        "En el lector de texto puedes decir: toma la foto, para leer lo que tienes enfrente. " +
+            "Repite, o lee otra vez, para volver a leer desde el principio. " +
+            "Siguiente párrafo, o párrafo anterior, para moverte por el texto. " +
+            "Pausa, para detener la lectura, y continúa, para seguir. " +
+            "Otra foto, para empezar con otro papel. " +
+            "Qué hay enfrente, para cambiar a describir lo que ve la cámara. " +
+            "Atrás, para volver a la cámara. Lista de comandos, para repetir esta lista. " + EVERYWHERE
+
+    const val ENVIRONMENT =
+        "En la descripción del entorno puedes decir: qué hay enfrente, o toma la foto, para que te describa lo que ve. " +
+            "Repite, o dilo otra vez, para escuchar la última descripción. " +
+            "Leer texto, para cambiar al lector de texto. " +
+            "Atrás, para volver a la cámara. Lista de comandos, para repetir esta lista. " + EVERYWHERE
+
+    const val DOCUMENTS =
+        "En documentos puedes decir: el nombre de una plantilla, para elegirla. " +
+            "Mientras respondes las preguntas, di tu respuesta con normalidad. " +
+            "Repite la pregunta, para escucharla otra vez. Cancelar, para elegir otra plantilla. " +
+            "Atrás, para volver al menú. Lista de comandos, para repetir esta lista. " + EVERYWHERE
+
+    const val PERSONALIZATION =
+        "En personalización puedes decir: háblame de tú, o háblame de usted. " +
+            "Llámame, y un nombre, para que te salude así. Llámate, y un nombre, para ponerme nombre. " +
+            "Otra voz, para probar la siguiente voz, o voz anterior. " +
+            "Más rápido, más lento, más grave o más agudo, para cambiar cómo hablo. " +
+            "Activa o desactiva los sonidos y las vibraciones. Vibración suave, normal o fuerte. " +
+            "Prueba de voz, para escucharme. Atrás, para volver al menú. " +
+            "Lista de comandos, para repetir esta lista. " + EVERYWHERE
+
+    const val SETTINGS =
+        "En configuración puedes decir: sube el volumen o baja el volumen. " +
+            "Activa los avisos, o desactiva los avisos, para que te diga cuando llega una notificación. " +
+            "Da acceso a notificaciones, para abrir los ajustes de Android y que pueda leerlas. " +
+            "Activa o desactiva escuchar fuera de la aplicación. " +
+            "Activa o desactiva el modo simple. " +
+            "Cerrar sesión. Atrás, para volver al menú. Lista de comandos, para repetir esta lista. " + EVERYWHERE
 }

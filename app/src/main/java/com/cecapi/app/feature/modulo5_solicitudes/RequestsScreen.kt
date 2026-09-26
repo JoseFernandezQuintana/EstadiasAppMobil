@@ -23,6 +23,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -46,12 +47,15 @@ import com.cecapi.app.core.voice.VoiceState
 
 @Composable
 fun RequestsScreen(
+    onBack: () -> Unit = {},
     viewModel: RequestsViewModel = hiltViewModel(),
 ) {
     val context = LocalContext.current
     val voiceState by viewModel.voiceState.collectAsState()
     val plantillas by viewModel.plantillas.collectAsState()
     val uiState by viewModel.uiState.collectAsState()
+
+    LaunchedEffect(Unit) { viewModel.back.collect { onBack() } }
 
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),

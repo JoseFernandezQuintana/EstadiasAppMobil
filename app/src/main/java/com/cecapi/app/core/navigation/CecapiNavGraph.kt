@@ -89,16 +89,33 @@ fun CecapiNavGraph(navController: NavHostController = rememberNavController()) {
             WakeScope { AiAssistantScreen() }
         }
         composable(CecapiDestinations.DOCUMENT_READER) {
-            WakeScope { DocumentReaderScreen() }
+            WakeScope {
+                DocumentReaderScreen(
+                    onBack = { navController.popBackStack() },
+                    onOpen = { route ->
+                        // Switching camera mode replaces this screen instead of stacking a second one.
+                        navController.popBackStack()
+                        navController.navigate(route)
+                    },
+                )
+            }
         }
         composable(CecapiDestinations.REQUESTS) {
-            WakeScope { RequestsScreen() }
+            WakeScope { RequestsScreen(onBack = { navController.popBackStack() }) }
         }
         composable(CecapiDestinations.LEARNING) {
             WakeScope { LearningScreen() }
         }
         composable(CecapiDestinations.ENVIRONMENT) {
-            WakeScope { EnvironmentScreen() }
+            WakeScope {
+                EnvironmentScreen(
+                    onBack = { navController.popBackStack() },
+                    onOpen = { route ->
+                        navController.popBackStack()
+                        navController.navigate(route)
+                    },
+                )
+            }
         }
     }
 }

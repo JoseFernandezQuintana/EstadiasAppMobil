@@ -42,6 +42,7 @@ import com.cecapi.app.core.theme.CecapiAccent
 import com.cecapi.app.core.theme.CecapiEyebrowStyle
 import com.cecapi.app.core.theme.CecapiSurfaceElevated
 import com.cecapi.app.core.theme.CecapiTextMuted
+import com.cecapi.app.core.ui.ScreenTopBar
 import com.cecapi.app.core.ui.voiceHint
 import com.cecapi.app.core.voice.AddressStyle
 import com.cecapi.app.core.voice.FeedbackCues
@@ -66,6 +67,8 @@ fun PersonalizationScreen(
     val vibrationCues by viewModel.vibrationCues.collectAsState()
     val savedLevel by viewModel.vibrationLevel.collectAsState()
 
+    LaunchedEffect(Unit) { viewModel.back.collect { onBack() } }
+
     var rate by remember(savedRate) { mutableFloatStateOf(savedRate) }
     var pitch by remember(savedPitch) { mutableFloatStateOf(savedPitch) }
     var level by remember(savedLevel) { mutableFloatStateOf(savedLevel.toFloat()) }
@@ -89,19 +92,12 @@ fun PersonalizationScreen(
             .padding(horizontal = 24.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onBack, modifier = Modifier.heightIn(min = 56.dp)) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver", tint = CecapiTextMuted)
-            }
-            Column(modifier = Modifier.padding(start = 4.dp)) {
-                Text("MENÚ", style = CecapiEyebrowStyle, color = CecapiTextMuted)
-                Text(
-                    "Personalización",
-                    style = MaterialTheme.typography.headlineLarge,
-                    color = MaterialTheme.colorScheme.onBackground,
-                )
-            }
-        }
+        ScreenTopBar(
+            eyebrow = "MENÚ",
+            title = "Personalización",
+            onBack = onBack,
+            onCommands = viewModel::onCommandsRequested,
+        )
 
         Section("MI VOZ", "Cómo suena el asistente") {
             ChoiceRow(
