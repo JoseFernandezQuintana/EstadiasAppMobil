@@ -66,6 +66,8 @@ fun PersonalizationScreen(
     val soundCues by viewModel.soundCues.collectAsState()
     val vibrationCues by viewModel.vibrationCues.collectAsState()
     val savedLevel by viewModel.vibrationLevel.collectAsState()
+    val blackScreen by viewModel.blackScreen.collectAsState()
+    val minBrightness by viewModel.minBrightness.collectAsState()
 
     LaunchedEffect(Unit) { viewModel.back.collect { onBack() } }
 
@@ -207,6 +209,25 @@ fun PersonalizationScreen(
             ActionButton("Guardar mi nombre", "Guardar mi nombre. Guarda el nombre que escribiste.") {
                 viewModel.onAssistantNameSaved(assistant)
             }
+        }
+
+        Section("PANTALLA", "Para quien no usa la imagen: todo en negro y con el menor brillo") {
+            SwitchRow(
+                label = "Pantalla negra",
+                description = "Todo se ve negro. Toca la pantalla para hablar; mantenla presionada para volver",
+                checked = blackScreen,
+                onChange = viewModel::onBlackScreenChanged,
+                help = "Pantalla negra. La pantalla se pone completamente negra y la aplicación se maneja solo con la voz. " +
+                    "Tocar la pantalla abre el micrófono. Para volver, di pantalla normal, o mantén presionada la pantalla.",
+            )
+            SwitchRow(
+                label = "Brillo mínimo",
+                description = "Baja el brillo al mínimo mientras la aplicación está abierta",
+                checked = minBrightness,
+                onChange = viewModel::onMinBrightnessChanged,
+                help = "Brillo mínimo. Deja la pantalla con el menor brillo y sin brillo automático mientras la aplicación " +
+                    "está abierta. Al salir de la aplicación, el teléfono vuelve a su brillo normal. Para volver, di brillo normal.",
+            )
         }
 
         Section("AVISOS", "Sonidos y vibraciones para saber qué pasó sin mirar la pantalla") {

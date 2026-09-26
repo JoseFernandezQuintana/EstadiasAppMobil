@@ -18,6 +18,7 @@ object ModuleVoice {
     fun menu(available: Collection<ModuloCecapi>): List<MenuItem> = buildList {
         if (ModuloCecapi.LECTOR_DOCUMENTOS in available || ModuloCecapi.ASISTENTE_ENTORNO in available) add(MenuItem.Camera)
         if (ModuloCecapi.CENTRO_SOLICITUDES in available) add(ModuloCecapi.CENTRO_SOLICITUDES.toMenuItem())
+        add(MenuItem.Chats)
         add(MenuItem.Personalization)
         add(MenuItem.Settings)
     }
@@ -26,6 +27,7 @@ object ModuleVoice {
     private val keywords: List<Pair<String, List<String>>> = listOf(
         MenuItem.SETTINGS_KEY to listOf("configuracion", "ajustes"),
         MenuItem.PERSONALIZATION_KEY to listOf("personalizacion", "personalizar"),
+        MenuItem.CHATS_KEY to listOf("chats", "chat", "conversaciones", "historial"),
         MenuItem.CAMERA_KEY to listOf("camara", "lector"),
         ModuloCecapi.CENTRO_SOLICITUDES.storageCode to listOf("documentos", "solicitudes", "solicitud"),
     )

@@ -54,7 +54,9 @@ import com.cecapi.app.core.theme.CecapiEyebrowStyle
 import com.cecapi.app.core.theme.CecapiSurface
 import com.cecapi.app.core.theme.CecapiSurfaceElevated
 import com.cecapi.app.core.theme.CecapiTextMuted
+import com.cecapi.app.core.ui.NoticeBanner
 import com.cecapi.app.core.ui.ScreenTopBar
+import com.cecapi.app.core.ui.SuggestionChip
 import com.cecapi.app.core.ui.voiceHint
 import kotlin.math.roundToInt
 
@@ -73,6 +75,8 @@ fun SettingsScreen(
     val announceNotifications by viewModel.announceNotifications.collectAsState()
     val listenOutsideApp by viewModel.listenOutsideApp.collectAsState()
     val user by viewModel.currentUser.collectAsState()
+    val storage by viewModel.storage.collectAsState()
+    val pendingClean by viewModel.pendingClean.collectAsState()
 
     var volume by remember { mutableFloatStateOf(viewModel.currentVolumePercent().toFloat()) }
 
@@ -165,6 +169,47 @@ fun SettingsScreen(
                 help = "Avisar cuando llegan. Cuando entra una notificación digo de qué aplicación es, " +
                     "pero nunca leo lo que dice si no me lo pides. No aviso durante llamadas ni con No molestar.",
             )
+        }
+
+        Section("ALMACENAMIENTO", "Cuánto espacio queda en el teléfono y cuánto ocupa la aplicación") {
+            val usage = storage
+            if (usage == null) {
+                Text("Calculando…", style = MaterialTheme.typography.bodyMedium, color = CecapiTextMuted)
+            } else {
+                if (usage.lowSpace) NoticeBanner("Queda poco espacio en el teléfono. Conviene liberar espacio.")
+                Text(
+                    text = viewModel.describeStorage(usage),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onBackground,
+                )
+                if (usage.oldPhotoCount > 0) {
+                    Text(
+                        "${usage.oldPhotoCount} fotos tienen más de un mes y se pueden borrar.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = CecapiTextMuted,
+                    )
+                }
+            }
+            if (pendingClean) {
+                NoticeBanner("¿Borrar las fotos de más de un mes? Di sí o no.")
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    SuggestionChip(label = "sí", onClick = viewModel::confirmClean)
+                    SuggestionChip(label = "no", onClick = viewModel::cancelClean)
+                }
+            } else {
+                ActionButton(
+                    "Liberar espacio",
+                    "Liberar espacio. Borra las fotos que la aplicación guardó hace más de un mes. " +
+                        "Te pido confirmación antes de borrar y el texto que leí sigue guardado. También puedes decir: libera espacio.",
+                    viewModel::askClean,
+                )
+                ActionButton(
+                    "Escuchar el reporte",
+                    "Escuchar el reporte. Te digo cuánto espacio libre queda y cuánto ocupa la aplicación. " +
+                        "También puedes decir: cuánto espacio tengo.",
+                    viewModel::speakStorage,
+                )
+            }
         }
 
         Section("ESCUCHAR FUERA DE LA APLICACIÓN", "Seguir atento a \"hola\" aunque cierres la aplicación") {

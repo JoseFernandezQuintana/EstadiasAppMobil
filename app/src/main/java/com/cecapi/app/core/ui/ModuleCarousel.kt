@@ -42,6 +42,7 @@ data class MenuItem(
         const val SETTINGS_KEY = "SETTINGS"
         const val PERSONALIZATION_KEY = "PERSONALIZATION"
         const val CAMERA_KEY = "CAMERA"
+        const val CHATS_KEY = "CHATS"
 
         val Camera = MenuItem(
             key = CAMERA_KEY,
@@ -49,6 +50,15 @@ data class MenuItem(
             subtitle = "Leer texto y describir lo que hay enfrente",
             accent = Color(0xFF4ADE80),
             help = "Cámara. Con ella puedo leerte un texto o describirte lo que hay enfrente. " +
+                "Toca dos veces para abrir.",
+        )
+
+        val Chats = MenuItem(
+            key = CHATS_KEY,
+            title = "Chats",
+            subtitle = "Tus conversaciones con el asistente",
+            accent = Color(0xFF60A5FA),
+            help = "Chats. Aquí escuchas, repasas y borras tus conversaciones con el asistente. " +
                 "Toca dos veces para abrir.",
         )
 

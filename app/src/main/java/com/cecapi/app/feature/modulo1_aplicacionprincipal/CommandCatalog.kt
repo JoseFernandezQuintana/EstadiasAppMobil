@@ -20,15 +20,16 @@ object CommandCatalog {
 
     private const val EVERYWHERE =
         "Estado del teléfono, batería, wifi, hora, fecha, año o mes. Sube el volumen o baja el volumen. " +
+            "Pantalla negra, para ver todo en negro, y pantalla normal, para volver. Brillo mínimo, y brillo normal. " +
             "Qué notificaciones tengo. Dime más, para profundizar en lo último que respondí. Silencio, para que me calle un momento. Para, para detenerme del todo."
 
     const val HOME =
-        "Puedes decir: menú, o el nombre de una opción, como cámara, documentos, personalización o configuración. " +
+        "Puedes decir: menú, o el nombre de una opción, como cámara, documentos, chats, personalización o configuración. " +
             "Qué hay enfrente, o leer texto. Iniciar sesión. " + EVERYWHERE +
             " Llámate, y un nombre, para ponerme nombre. Repite la solicitud anterior. Cerrar la aplicación."
 
     const val DASHBOARD =
-        "Puedes decir: menú, o el nombre de una opción, como cámara, documentos, personalización o configuración. " +
+        "Puedes decir: menú, o el nombre de una opción, como cámara, documentos, chats, personalización o configuración. " +
             "Qué hay enfrente, o leer texto. " + EVERYWHERE +
             " Repite la solicitud anterior. Cerrar sesión. Cerrar la aplicación."
 
@@ -62,6 +63,12 @@ object CommandCatalog {
             "Repite la pregunta, para escucharla otra vez. Cancelar, para elegir otra plantilla. " +
             "Atrás, para volver al menú. Lista de comandos, para repetir esta lista. " + EVERYWHERE
 
+    const val CHATS =
+        "En chats puedes decir: lee el último, para escuchar la conversación más reciente. " +
+            "Siguiente, o anterior, para moverte entre conversaciones. Repite, para escucharla otra vez. " +
+            "Cuántos chats tengo. Borra este chat, o borra todos los chats; te pido que confirmes con sí o no. " +
+            "Atrás, para volver al menú. Lista de comandos, para repetir esta lista. " + EVERYWHERE
+
     const val PERSONALIZATION =
         "En personalización puedes decir: háblame de tú, o háblame de usted. " +
             "Llámame, y un nombre, para que te salude así. Llámate, y un nombre, para ponerme nombre. " +
@@ -76,6 +83,7 @@ object CommandCatalog {
             "Activa los avisos, o desactiva los avisos, para que te diga cuando llega una notificación. " +
             "Da acceso a notificaciones, para abrir los ajustes de Android y que pueda leerlas. " +
             "Activa o desactiva escuchar fuera de la aplicación. " +
+            "Cuánto espacio tengo, para el reporte de almacenamiento. Libera espacio, para borrar las fotos de más de un mes; te pido que confirmes con sí o no. " +
             "Activa o desactiva el modo simple. " +
             "Cerrar sesión. Atrás, para volver al menú. Lista de comandos, para repetir esta lista. " + EVERYWHERE
 }

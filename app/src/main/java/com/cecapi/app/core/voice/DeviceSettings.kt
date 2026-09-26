@@ -64,6 +64,12 @@ class DeviceSettings @Inject constructor(
     /** Keep the assistant listening for "hola" after the app is closed (needs a visible notification). Off by default. */
     val backgroundListening: Flow<Boolean> = data.map { it[KEY_BACKGROUND] ?: false }
 
+    /** Everything on screen is drawn black; the person works by voice. Off by default, and always has an exit. */
+    val blackScreen: Flow<Boolean> = data.map { it[KEY_BLACK_SCREEN] ?: false }
+
+    /** Screen brightness held at the minimum while the app is open, ignoring automatic brightness. */
+    val minBrightness: Flow<Boolean> = data.map { it[KEY_MIN_BRIGHTNESS] ?: false }
+
     init {
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
         scope.launch {
@@ -102,6 +108,10 @@ class DeviceSettings @Inject constructor(
 
     suspend fun setBackgroundListening(enabled: Boolean) = context.deviceSettingsStore.edit { it[KEY_BACKGROUND] = enabled }
 
+    suspend fun setBlackScreen(enabled: Boolean) = context.deviceSettingsStore.edit { it[KEY_BLACK_SCREEN] = enabled }
+
+    suspend fun setMinBrightness(enabled: Boolean) = context.deviceSettingsStore.edit { it[KEY_MIN_BRIGHTNESS] = enabled }
+
     private companion object {
         const val DEFAULT_RATE = 1.0f
         val KEY_RATE = floatPreferencesKey("speech_rate")
@@ -115,5 +125,7 @@ class DeviceSettings @Inject constructor(
         val KEY_SIMPLE = booleanPreferencesKey("simple_mode")
         val KEY_ANNOUNCE = booleanPreferencesKey("announce_notifications")
         val KEY_BACKGROUND = booleanPreferencesKey("background_listening")
+        val KEY_BLACK_SCREEN = booleanPreferencesKey("black_screen")
+        val KEY_MIN_BRIGHTNESS = booleanPreferencesKey("min_brightness")
     }
 }

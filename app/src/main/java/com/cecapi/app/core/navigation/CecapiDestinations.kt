@@ -8,6 +8,7 @@ object CecapiDestinations {
     const val DASHBOARD = "dashboard"
     const val SETTINGS = "settings"
     const val PERSONALIZATION = "personalization"
+    const val CHATS = "chats"
 
     /** The "Cámara" card: one entry that leads to reading text or describing what is in front. */
     const val CAMERA_HUB = "camera_hub"

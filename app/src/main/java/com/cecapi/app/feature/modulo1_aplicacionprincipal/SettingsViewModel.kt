@@ -2,6 +2,8 @@ package com.cecapi.app.feature.modulo1_aplicacionprincipal
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.cecapi.app.core.util.StorageReport
+import com.cecapi.app.core.util.StorageUsage
 import com.cecapi.app.core.util.VolumeControl
 import com.cecapi.app.core.voice.DeviceSettings
 import com.cecapi.app.core.voice.FeedbackCues
@@ -11,9 +13,11 @@ import com.cecapi.app.notifications.NotificationAccess
 import com.cecapi.app.service.BackgroundListening
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -31,6 +35,7 @@ class SettingsViewModel @Inject constructor(
     private val notificationAccess: NotificationAccess,
     private val backgroundListening: BackgroundListening,
     private val sessionRepository: SessionRepository,
+    private val storageReport: StorageReport,
 ) : ViewModel() {
 
     val simpleMode: StateFlow<Boolean> = deviceSettings.simpleMode.stateIn(viewModelScope, SharingStarted.Eagerly, true)
@@ -50,7 +55,15 @@ class SettingsViewModel @Inject constructor(
     private val _listenOutsideRequests = MutableSharedFlow<Boolean>(extraBufferCapacity = 1)
     val listenOutsideRequests: SharedFlow<Boolean> = _listenOutsideRequests
 
+    private val _storage = MutableStateFlow<StorageUsage?>(null)
+    val storage: StateFlow<StorageUsage?> = _storage.asStateFlow()
+
+    /** True while the person has been asked whether to delete the old photos and has not answered. */
+    private val _pendingClean = MutableStateFlow(false)
+    val pendingClean: StateFlow<Boolean> = _pendingClean.asStateFlow()
+
     init {
+        refreshStorage()
         viewModelScope.launch {
             voiceEngine.recognizedSpeech.collect { speech -> onSpeech(speech.text) }
         }
@@ -74,8 +87,17 @@ class SettingsViewModel @Inject constructor(
             listOf("activ", "enciende", "prende", "pon ", "quiero").any { it in text } -> true
             else -> null
         }
+        // "si" and "no" must be whole words: "siguiente" contains "si".
+        val spokenWords = text.split(" ")
+        fun hasWord(vararg words: String) = words.any { it in spokenWords }
+        val cleaning = _pendingClean.value
         when {
             CommandCatalog.isRequest(spoken) -> voiceEngine.speak(CommandCatalog.SETTINGS, listenAfter = true)
+            cleaning && hasWord("si", "confirmo", "borralas", "adelante") -> confirmClean()
+            cleaning && hasWord("no", "cancela", "cancelar") -> cancelClean()
+            has("cuanto espacio", "espacio libre", "almacenamiento", "cuanto ocupa") -> speakStorage()
+            has("libera espacio", "liberar espacio", "libera memoria", "limpia el espacio", "limpiar espacio", "borra las fotos", "borrar las fotos") ->
+                askClean()
             has("cerrar sesion", "cierra sesion", "cierra mi sesion", "salir de la cuenta") ->
                 if (currentUser.value != null) onLogout() else voiceEngine.speak("No hay una sesión iniciada.", listenAfter = true)
             has("fuera de la app", "fuera de la aplicacion", "segundo plano") && enable != null ->
@@ -94,6 +116,57 @@ class SettingsViewModel @Inject constructor(
     fun onCommandsRequested() {
         voiceEngine.speak(CommandCatalog.SETTINGS, listenAfter = true)
     }
+
+    fun refreshStorage() {
+        viewModelScope.launch { _storage.value = storageReport.read() }
+    }
+
+    fun speakStorage() {
+        viewModelScope.launch {
+            val usage = storageReport.read()
+            _storage.value = usage
+            voiceEngine.speak(storageReport.describe(usage), listenAfter = true)
+        }
+    }
+
+    /** Offers to delete the photos older than a month. Nothing is deleted until the person says yes. */
+    fun askClean() {
+        viewModelScope.launch {
+            val usage = storageReport.read()
+            _storage.value = usage
+            if (usage.oldPhotoCount == 0) {
+                voiceEngine.speak(
+                    "No hay fotos de más de ${StorageReport.OLD_PHOTO_DAYS} días que borrar.",
+                    listenAfter = true,
+                )
+            } else {
+                _pendingClean.value = true
+                voiceEngine.speak(
+                    "Puedo borrar ${usage.oldPhotoCount} fotos de más de ${StorageReport.OLD_PHOTO_DAYS} días y liberar " +
+                        "${storageReport.format(usage.oldPhotoBytes)}. Solo se borran las fotos; el texto que leí sigue guardado. " +
+                        "¿Las borro? Di sí o no.",
+                    listenAfter = true,
+                )
+            }
+        }
+    }
+
+    fun confirmClean() {
+        _pendingClean.value = false
+        viewModelScope.launch {
+            val (count, bytes) = storageReport.deleteOldPhotos()
+            _storage.value = storageReport.read()
+            cues.play(FeedbackCues.Cue.SUCCESS)
+            voiceEngine.speak("Listo, borré $count fotos y liberé ${storageReport.format(bytes)}.", listenAfter = true)
+        }
+    }
+
+    fun cancelClean() {
+        _pendingClean.value = false
+        voiceEngine.speak("De acuerdo, no borré nada.", listenAfter = true)
+    }
+
+    fun describeStorage(usage: StorageUsage): String = storageReport.describe(usage)
 
     fun currentVolumePercent(): Int = volumeControl.percent()
 

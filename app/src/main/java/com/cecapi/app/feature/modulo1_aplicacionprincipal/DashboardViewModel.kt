@@ -283,6 +283,7 @@ class DashboardViewModel @Inject constructor(
             MenuItem.SETTINGS_KEY -> onSettingsSelected()
             MenuItem.CAMERA_KEY -> openRoute(CecapiDestinations.CAMERA_HUB, "Abriendo la cámara.")
             MenuItem.PERSONALIZATION_KEY -> openRoute(CecapiDestinations.PERSONALIZATION, "Abriendo la personalización.")
+            MenuItem.CHATS_KEY -> openRoute(CecapiDestinations.CHATS, "Abriendo los chats.")
             else -> ModuloCecapi.fromStorageCode(key)?.let(::onModuleSelected)
         }
     }

@@ -90,6 +90,13 @@ interface ConsultaIaDao {
 
     @Query("SELECT * FROM consultas_ia WHERE usuario_id = :usuarioId ORDER BY fecha_hora DESC LIMIT 50")
     fun observeRecent(usuarioId: Long): Flow<List<ConsultaIaEntity>>
+
+    // The answers go with their question (foreign key with cascade), so nothing is left behind.
+    @Query("DELETE FROM consultas_ia WHERE id = :consultaId")
+    suspend fun deleteById(consultaId: Long)
+
+    @Query("DELETE FROM consultas_ia WHERE usuario_id = :usuarioId")
+    suspend fun deleteAllByUser(usuarioId: Long)
 }
 
 @Dao

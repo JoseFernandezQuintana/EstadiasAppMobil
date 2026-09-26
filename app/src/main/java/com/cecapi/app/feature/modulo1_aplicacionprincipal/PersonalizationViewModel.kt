@@ -2,6 +2,7 @@ package com.cecapi.app.feature.modulo1_aplicacionprincipal
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.cecapi.app.core.util.DisplayControl
 import com.cecapi.app.core.voice.AddressStyle
 import com.cecapi.app.core.voice.AssistantPreferences
 import com.cecapi.app.core.voice.DeviceSettings
@@ -29,6 +30,7 @@ class PersonalizationViewModel @Inject constructor(
     private val deviceSettings: DeviceSettings,
     private val assistantPreferences: AssistantPreferences,
     private val cues: FeedbackCues,
+    private val displayControl: DisplayControl,
 ) : ViewModel() {
 
     val speechRate: StateFlow<Float> = deviceSettings.speechRate.stateIn(viewModelScope, SharingStarted.Eagerly, 1.0f)
@@ -40,6 +42,8 @@ class PersonalizationViewModel @Inject constructor(
     val soundCues: StateFlow<Boolean> = deviceSettings.soundCues.stateIn(viewModelScope, SharingStarted.Eagerly, true)
     val vibrationCues: StateFlow<Boolean> = deviceSettings.vibrationCues.stateIn(viewModelScope, SharingStarted.Eagerly, true)
     val vibrationLevel: StateFlow<Int> = deviceSettings.vibrationLevel.stateIn(viewModelScope, SharingStarted.Eagerly, 2)
+    val blackScreen: StateFlow<Boolean> = deviceSettings.blackScreen.stateIn(viewModelScope, SharingStarted.Eagerly, false)
+    val minBrightness: StateFlow<Boolean> = deviceSettings.minBrightness.stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     private val _back = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     val back: SharedFlow<Unit> = _back
@@ -205,6 +209,10 @@ class PersonalizationViewModel @Inject constructor(
             },
         )
     }
+
+    fun onBlackScreenChanged(enabled: Boolean) = displayControl.setBlackScreen(enabled)
+
+    fun onMinBrightnessChanged(enabled: Boolean) = displayControl.setMinBrightness(enabled)
 
     fun onTestCue(cue: FeedbackCues.Cue, description: String) {
         cues.play(cue)

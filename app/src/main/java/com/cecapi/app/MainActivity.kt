@@ -13,13 +13,19 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.cecapi.app.core.navigation.CecapiDestinations
 import com.cecapi.app.core.navigation.CecapiNavGraph
 import com.cecapi.app.core.theme.CecapiTheme
+import com.cecapi.app.core.ui.BlackScreen
 import com.cecapi.app.core.ui.LocalVoiceHelp
 import com.cecapi.app.core.ui.VoiceHelp
+import com.cecapi.app.core.util.DisplayControl
 import com.cecapi.app.core.util.VolumeControl
 import com.cecapi.app.core.voice.DeviceSettings
 import com.cecapi.app.core.voice.GlobalVoiceCommands
@@ -39,6 +45,7 @@ class MainActivity : ComponentActivity() {
     @Inject lateinit var voiceEngine: VoiceEngine
     @Inject lateinit var wakeWordController: WakeWordController
     @Inject lateinit var volumeControl: VolumeControl
+    @Inject lateinit var displayControl: DisplayControl
 
     // Injecting it is what makes the saved voice speed and cue settings apply at startup.
     @Inject lateinit var deviceSettings: DeviceSettings
@@ -100,15 +107,41 @@ class MainActivity : ComponentActivity() {
         volumeControlStream = AudioManager.STREAM_MUSIC
         // A blind user cannot tell whether the screen went dark, so keep it on while the app is open.
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        // Minimum brightness is set on this window only, so it ignores automatic brightness while the app
+        // is open and the phone is back to normal as soon as the app is left.
+        lifecycleScope.launch {
+            deviceSettings.minBrightness.collect { minimum ->
+                window.attributes = window.attributes.apply {
+                    screenBrightness = if (minimum) {
+                        DisplayControl.MIN_BRIGHTNESS
+                    } else {
+                        WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
+                    }
+                }
+            }
+        }
         setContent {
             CecapiTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
-                    // Edge-to-edge draws under the status/navigation bars; keep content clear of them.
-                    Box(modifier = Modifier.fillMaxSize().safeDrawingPadding()) {
-                        val navController = rememberNavController()
-                        val voiceHelp = remember { VoiceHelp(voiceEngine) }
-                        CompositionLocalProvider(LocalVoiceHelp provides voiceHelp) {
-                            CecapiNavGraph(navController = navController)
+                    val navController = rememberNavController()
+                    val blackScreen by deviceSettings.blackScreen.collectAsState(initial = false)
+                    val route = navController.currentBackStackEntryAsState().value?.destination?.route
+                    // The camera screens keep their picture: it is what they are for.
+                    val showBlack = blackScreen &&
+                        route != CecapiDestinations.DOCUMENT_READER && route != CecapiDestinations.ENVIRONMENT
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        // Edge-to-edge draws under the status/navigation bars; keep content clear of them.
+                        Box(modifier = Modifier.fillMaxSize().safeDrawingPadding()) {
+                            val voiceHelp = remember { VoiceHelp(voiceEngine) }
+                            CompositionLocalProvider(LocalVoiceHelp provides voiceHelp) {
+                                CecapiNavGraph(navController = navController)
+                            }
+                        }
+                        if (showBlack) {
+                            BlackScreen(
+                                onTap = { voiceEngine.speak(voiceEngine.wakePrompt(), listenAfter = true) },
+                                onHold = { displayControl.setBlackScreen(false) },
+                            )
                         }
                     }
                 }
