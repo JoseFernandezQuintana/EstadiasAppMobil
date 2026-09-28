@@ -41,6 +41,7 @@ class SettingsViewModel @Inject constructor(
     val simpleMode: StateFlow<Boolean> = deviceSettings.simpleMode.stateIn(viewModelScope, SharingStarted.Eagerly, true)
     val announceNotifications: StateFlow<Boolean> = deviceSettings.announceNotifications.stateIn(viewModelScope, SharingStarted.Eagerly, true)
     val listenOutsideApp: StateFlow<Boolean> = deviceSettings.backgroundListening.stateIn(viewModelScope, SharingStarted.Eagerly, false)
+    val aiEnabled: StateFlow<Boolean> = deviceSettings.aiEnabled.stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     /** The signed-in user, or null when Configuración was opened from the home screen. */
     val currentUser: StateFlow<UsuarioEntity?> = sessionRepository.currentUser
@@ -60,6 +61,11 @@ class SettingsViewModel @Inject constructor(
 
     /** True while the person has been asked whether to delete the old photos and has not answered. */
     private val _pendingClean = MutableStateFlow(false)
+
+    /** True while the person has been asked to confirm deleting their account, for a short time only. */
+    private val _pendingDeleteAccount = MutableStateFlow(false)
+    val pendingDeleteAccount: StateFlow<Boolean> = _pendingDeleteAccount.asStateFlow()
+    private var deleteAskedAt = 0L
     val pendingClean: StateFlow<Boolean> = _pendingClean.asStateFlow()
 
     init {
@@ -91,8 +97,13 @@ class SettingsViewModel @Inject constructor(
         val spokenWords = text.split(" ")
         fun hasWord(vararg words: String) = words.any { it in spokenWords }
         val cleaning = _pendingClean.value
+        val deletingAccount = _pendingDeleteAccount.value && System.currentTimeMillis() - deleteAskedAt < CONFIRM_WINDOW_MS
         when {
             CommandCatalog.isRequest(spoken) -> voiceEngine.speak(CommandCatalog.SETTINGS, listenAfter = true)
+            deletingAccount && !VoiceText.isNo(spoken) && spokenWords.any { it in DELETE_CONFIRM_WORDS } -> confirmDeleteAccount()
+            deletingAccount && VoiceText.isNo(spoken) -> cancelDeleteAccount()
+            has("borra mi cuenta", "borrar mi cuenta", "elimina mi cuenta", "eliminar mi cuenta", "borra mis datos", "borrar mis datos", "elimina mis datos", "eliminar mis datos", "darme de baja") -> askDeleteAccount()
+            has("inteligencia artificial", "la ia") && enable != null -> onAiEnabledChanged(enable)
             cleaning && hasWord("si", "claro", "dale", "ok", "okey", "supuesto", "afirmativo", "correcto", "seguro", "hazlo", "confirmo", "borralas", "adelante") -> confirmClean()
             cleaning && hasWord("no", "nunca", "negativo", "olvidalo", "dejalo", "cancela", "cancelar") -> cancelClean()
             has("cache", "memoria temporal", "archivos temporales", "temporales") &&
@@ -183,6 +194,62 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun describeStorage(usage: StorageUsage): String = storageReport.describe(usage)
+
+    // ---- Privacy: delete my account, and the AI switch ------------------------------------------------------
+
+    /** Asks first, in plain words about what is lost: this cannot be undone. Needs a signed-in person. */
+    fun askDeleteAccount() {
+        if (currentUser.value == null) {
+            voiceEngine.speak("No hay una sesión iniciada, así que no hay una cuenta que borrar.", listenAfter = true)
+            return
+        }
+        _pendingDeleteAccount.value = true
+        deleteAskedAt = System.currentTimeMillis()
+        voiceEngine.speak(
+            "¿Borro tu cuenta y todo lo que guardaste: chats, resultados, documentos y fotos? " +
+                "No se puede deshacer. Di sí, borrar, para confirmar, o no.",
+            listenAfter = true,
+        )
+    }
+
+    fun confirmDeleteAccount() {
+        _pendingDeleteAccount.value = false
+        viewModelScope.launch {
+            if (sessionRepository.deleteCurrentAccount()) {
+                cues.play(FeedbackCues.Cue.SUCCESS)
+                voiceEngine.speak("Listo. Borré tu cuenta y todos tus datos.")
+                _loggedOut.tryEmit(Unit)
+            } else {
+                voiceEngine.speak("No pude borrar la cuenta porque no hay una sesión iniciada.")
+            }
+        }
+    }
+
+    fun cancelDeleteAccount() {
+        _pendingDeleteAccount.value = false
+        voiceEngine.speak("De acuerdo, no borré nada.", listenAfter = true)
+    }
+
+    /** The AI is optional and off by default: what the assistant does not understand is never sent anywhere unless this is on. */
+    fun onAiEnabledChanged(enabled: Boolean) {
+        viewModelScope.launch { deviceSettings.setAiEnabled(enabled) }
+        voiceEngine.speak(
+            if (enabled) {
+                "Inteligencia artificial activada. Cuando no entienda una frase y haya internet, podré enviarla a un servidor para interpretarla. " +
+                    "Por ahora todavía no está conectada. No la actives si quien usa la aplicación es menor de edad."
+            } else {
+                "Inteligencia artificial desactivada. Nada de lo que digas se envía por internet."
+            },
+        )
+    }
+
+    private companion object {
+        /** A confirmation to delete an account is only good for a short while. */
+        const val CONFIRM_WINDOW_MS = 30_000L
+
+        /** Whole words that confirm the deletion; a bare "ok" or "dale" is not enough for something this final. */
+        val DELETE_CONFIRM_WORDS = setOf("si", "confirmo", "borrar", "borrala", "borralo", "elimina", "eliminala")
+    }
 
     fun currentVolumePercent(): Int = volumeControl.percent()
 

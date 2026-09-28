@@ -31,6 +31,7 @@ class DeviceSettings @Inject constructor(
     @ApplicationContext private val context: Context,
     private val voiceEngine: VoiceEngine,
     private val cues: FeedbackCues,
+    private val intentFallback: IntentFallback,
 ) {
     private val data get() = context.deviceSettingsStore.data
 
@@ -70,6 +71,9 @@ class DeviceSettings @Inject constructor(
     /** Screen brightness held at the minimum while the app is open, ignoring automatic brightness. */
     val minBrightness: Flow<Boolean> = data.map { it[KEY_MIN_BRIGHTNESS] ?: false }
 
+    /** Whether phrases the app does not understand may be sent to the AI server. Off by default. */
+    val aiEnabled: Flow<Boolean> = data.map { it[KEY_AI] ?: false }
+
     init {
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
         scope.launch {
@@ -84,6 +88,7 @@ class DeviceSettings @Inject constructor(
         }
         scope.launch { combine(voiceName, pitch) { name, p -> name to p }.collect { (name, p) -> voiceEngine.applyVoiceProfile(name, p) } }
         scope.launch { addressStyle.collect { voiceEngine.addressStyle = it } }
+        scope.launch { aiEnabled.collect { intentFallback.enabled = it } }
     }
 
     suspend fun setSpeechRate(rate: Float) = context.deviceSettingsStore.edit { it[KEY_RATE] = rate.coerceIn(0.5f, 2.0f) }
@@ -112,6 +117,8 @@ class DeviceSettings @Inject constructor(
 
     suspend fun setMinBrightness(enabled: Boolean) = context.deviceSettingsStore.edit { it[KEY_MIN_BRIGHTNESS] = enabled }
 
+    suspend fun setAiEnabled(enabled: Boolean) = context.deviceSettingsStore.edit { it[KEY_AI] = enabled }
+
     private companion object {
         const val DEFAULT_RATE = 1.0f
         val KEY_RATE = floatPreferencesKey("speech_rate")
@@ -127,5 +134,6 @@ class DeviceSettings @Inject constructor(
         val KEY_BACKGROUND = booleanPreferencesKey("background_listening")
         val KEY_BLACK_SCREEN = booleanPreferencesKey("black_screen")
         val KEY_MIN_BRIGHTNESS = booleanPreferencesKey("min_brightness")
+        val KEY_AI = booleanPreferencesKey("ai_enabled")
     }
 }

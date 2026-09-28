@@ -294,7 +294,7 @@ class LoginViewModel @Inject constructor(
                 voiceEngine.speak("Ocurrió un problema al verificar tus datos. Intenta de nuevo en unos segundos.")
                 return@launch
             }
-            Log.d(TAG, "login attempt user=$username success=${result is LoginResult.Success}")
+            Log.d(TAG, "login attempt success=${result is LoginResult.Success}")
             when (result) {
                 is LoginResult.Success -> {
                     attemptsStore.reset()

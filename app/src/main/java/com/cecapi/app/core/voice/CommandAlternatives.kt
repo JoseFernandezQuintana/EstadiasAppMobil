@@ -106,7 +106,9 @@ object CommandAlternatives {
                 "Almacenamiento: cuánto espacio tengo, espacio libre, almacenamiento o cuánto ocupa. " +
                 "Liberar: libera espacio, liberar espacio, libera memoria, limpia el espacio o borra las fotos. " +
                 "Caché: limpia la caché, borra la caché, vacía la caché, libera la caché o borra los archivos temporales. " +
-                "Cuenta: cerrar sesión, cierra mi sesión o salir de la cuenta.",
+                "Inteligencia artificial: activa la inteligencia artificial o desactívala; empieza apagada. " +
+                "Cuenta: cerrar sesión, cierra mi sesión o salir de la cuenta. " +
+                "Borrar todo: borra mi cuenta, elimina mi cuenta, borra mis datos o darme de baja; siempre pide confirmar con sí, borrar.",
         ),
         Area(
             key = "session",

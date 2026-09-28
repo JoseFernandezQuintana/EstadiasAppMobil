@@ -100,6 +100,8 @@ object CommandCatalog {
             "Activa o desactiva escuchar fuera de la aplicación. " +
             "Cuánto espacio tengo, para el reporte de almacenamiento. Libera espacio, para borrar las fotos de más de un mes; te pido que confirmes con sí o no. " +
             "Limpia la caché, para borrar archivos temporales. " +
+            "Activa o desactiva la inteligencia artificial en internet; apagada, nada sale de tu teléfono. " +
+            "Borra mi cuenta, para eliminar tu cuenta y todo lo que guardaste; te pido que confirmes. " +
             "Activa o desactiva el modo simple. " +
             "Cerrar sesión. Atrás, para volver al menú. " + MORE
 }

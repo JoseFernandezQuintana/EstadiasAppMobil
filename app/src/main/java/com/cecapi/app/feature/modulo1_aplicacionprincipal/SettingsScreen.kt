@@ -73,6 +73,8 @@ fun SettingsScreen(
     val user by viewModel.currentUser.collectAsState()
     val storage by viewModel.storage.collectAsState()
     val pendingClean by viewModel.pendingClean.collectAsState()
+    val aiEnabled by viewModel.aiEnabled.collectAsState()
+    val pendingDeleteAccount by viewModel.pendingDeleteAccount.collectAsState()
 
     var volume by remember { mutableFloatStateOf(viewModel.currentVolumePercent().toFloat()) }
 
@@ -226,6 +228,19 @@ fun SettingsScreen(
             )
         }
 
+        Section("PRIVACIDAD", "Qué sale de tu teléfono: por defecto, nada") {
+            SwitchRow(
+                label = "Inteligencia artificial en internet",
+                description = "Todavía no está conectada. No la actives si quien usa la aplicación es menor de edad",
+                checked = aiEnabled,
+                onChange = viewModel::onAiEnabledChanged,
+                help = "Inteligencia artificial en internet. Apagada, nada de lo que dices se envía a ningún servidor. " +
+                    "Encendida, cuando no entienda una frase y haya internet, podrá enviarla a un servidor para interpretarla. " +
+                    "Los proveedores de inteligencia artificial no permiten su uso con menores de edad. " +
+                    "También puedes decir: activa la inteligencia artificial, o desactívala.",
+            )
+        }
+
         Section("ACCESIBILIDAD", "Para que todo sea más fácil de usar") {
             SwitchRow(
                 label = "Modo simple",
@@ -257,6 +272,20 @@ fun SettingsScreen(
                     colors = ButtonDefaults.buttonColors(containerColor = CecapiError, contentColor = Color.White),
                 ) {
                     Text("Cerrar sesión", style = MaterialTheme.typography.titleMedium)
+                }
+                if (pendingDeleteAccount) {
+                    NoticeBanner("¿Borrar tu cuenta y todo lo que guardaste? No se puede deshacer. Di sí, borrar, o no.")
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        SuggestionChip(label = "sí, borrar", onClick = viewModel::confirmDeleteAccount)
+                        SuggestionChip(label = "no", onClick = viewModel::cancelDeleteAccount)
+                    }
+                } else {
+                    ActionButton(
+                        "Borrar mi cuenta y mis datos",
+                        "Borrar mi cuenta y mis datos. Elimina tu cuenta y todo lo que guardaste: chats, resultados, documentos y fotos. " +
+                            "Te pido confirmación y no se puede deshacer. También puedes decir: borra mi cuenta.",
+                        viewModel::askDeleteAccount,
+                    )
                 }
             }
         }

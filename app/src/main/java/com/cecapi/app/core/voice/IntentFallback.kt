@@ -21,8 +21,22 @@ data class AiReply(
  */
 @Singleton
 class IntentFallback @Inject constructor() {
+    /**
+     * Off until the person turns it on in Configuración: nothing they say is sent to a server by default, and
+     * the AI providers' terms do not allow minors. While it is off, [resolver] reads as null, so every caller
+     * behaves as if there were no AI at all.
+     */
     @Volatile
-    var resolver: (suspend (text: String, deep: Boolean) -> AiReply?)? = null
+    var enabled: Boolean = false
+
+    @Volatile
+    private var registered: (suspend (text: String, deep: Boolean) -> AiReply?)? = null
+
+    var resolver: (suspend (text: String, deep: Boolean) -> AiReply?)?
+        get() = if (enabled) registered else null
+        set(value) {
+            registered = value
+        }
 
     /** The last question that received an answer, so "dime más" can ask for the deep version of it. */
     @Volatile
