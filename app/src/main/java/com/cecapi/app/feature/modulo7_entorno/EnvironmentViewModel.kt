@@ -4,6 +4,7 @@ import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.cecapi.app.core.navigation.CecapiDestinations
+import com.cecapi.app.core.ui.GALLERY_WORDS
 import com.cecapi.app.core.util.StorageReport
 import com.cecapi.app.core.voice.FeedbackCues
 import com.cecapi.app.core.voice.VoiceEngine
@@ -52,6 +53,10 @@ class EnvironmentViewModel @Inject constructor(
     private val _back = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     val back: SharedFlow<Unit> = _back
 
+    // Asks the screen to open the system picture picker (it owns the activity result launcher).
+    private val _pickRequests = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    val pickRequests: SharedFlow<Unit> = _pickRequests
+
     private val _routes = MutableSharedFlow<String>(extraBufferCapacity = 1)
     val routes: SharedFlow<String> = _routes
 
@@ -78,6 +83,7 @@ class EnvironmentViewModel @Inject constructor(
                 voiceEngine.speak("Cambiando al lector de texto.")
                 _routes.tryEmit(CecapiDestinations.DOCUMENT_READER)
             }
+            has(*GALLERY_WORDS) -> pedirGaleria()
             has("otra vez", "repite", "repetir", "de nuevo", "dilo") -> repetir()
             has("enfrente", "describe", "descripcion", "foto", "fotografia", "captura", "toma", "analiza",
                 "que hay", "que ves", "entorno") -> pedirCaptura()
@@ -130,6 +136,25 @@ class EnvironmentViewModel @Inject constructor(
 
     fun onCameraPermissionDenied() {
         voiceEngine.speak("Sin el permiso de la cámara no puedo describir lo que hay enfrente. Actívalo en los ajustes de la aplicación.")
+    }
+
+    /**
+     * "Elige una foto": opens the system picture picker. The person picks one picture and the app sees only
+     * that one; there is no permission to the whole gallery. Said out loud first so it is always their decision.
+     */
+    fun pedirGaleria() {
+        if (_uiState.value.isProcessing || !sesionIniciada()) return
+        voiceEngine.speak("Voy a abrir tus fotos. Elige la imagen que quieres que describa; solo veré esa.")
+        _pickRequests.tryEmit(Unit)
+    }
+
+    fun onPickCancelled() {
+        voiceEngine.speak("No elegiste ninguna foto. Di qué hay enfrente, o elige una foto.", listenAfter = true)
+    }
+
+    fun onPickFailed() {
+        cues.play(FeedbackCues.Cue.ERROR)
+        voiceEngine.speak("No pude abrir esa imagen. Prueba con otra.", listenAfter = true)
     }
 
     fun onCaptureFailed() {

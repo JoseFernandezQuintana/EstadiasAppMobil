@@ -49,6 +49,8 @@ import com.cecapi.app.core.theme.CecapiEyebrowStyle
 import com.cecapi.app.core.theme.CecapiSurfaceElevated
 import com.cecapi.app.core.theme.CecapiTextMuted
 import com.cecapi.app.core.theme.CecapiTextPrimary
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.io.File
 
 /**
@@ -227,3 +229,27 @@ fun ImageCapture.capturePhoto(
         },
     )
 }
+
+/**
+ * Copies a picture the person chose from their gallery into the app's private folder [folder], so the rest of
+ * the app treats it like a photo it took itself and never depends on access to the person's media.
+ * Returns null when the picture cannot be read.
+ */
+suspend fun copyPickedImage(context: Context, source: Uri, folder: String): Pair<Uri, String>? =
+    withContext(Dispatchers.IO) {
+        runCatching {
+            val file = File(context.filesDir, "$folder/pick_${System.currentTimeMillis()}.jpg")
+                .apply { parentFile?.mkdirs() }
+            val copied = context.contentResolver.openInputStream(source)?.use { input ->
+                file.outputStream().use { output -> input.copyTo(output) }
+            }
+            if (copied == null) null else Uri.fromFile(file) to file.absolutePath
+        }.getOrNull()
+    }
+
+/** What people say to choose a picture from their own gallery instead of taking one. */
+val GALLERY_WORDS = arrayOf(
+    "galeria", "mis fotos", "abre mis fotos", "elige una foto", "elegir una foto", "elijo una foto",
+    "escoge una foto", "selecciona una foto", "seleccionar foto", "de mi telefono", "de mi celular",
+    "imagen guardada", "foto guardada", "fotos guardadas",
+)

@@ -58,12 +58,14 @@ object CommandCatalog {
             "Siguiente párrafo, o párrafo anterior, para moverte por el texto. " +
             "Pausa, para detener la lectura, y continúa, para seguir. " +
             "Otra foto, para empezar con otro papel. " +
+            "Elige una foto, para leer una imagen que ya tienes en tu teléfono; tú eliges cuál y solo veo esa. " +
             "Qué hay enfrente, para cambiar a describir lo que ve la cámara. " +
             "Atrás, para volver a la cámara. " + MORE
 
     const val ENVIRONMENT =
         "En la descripción del entorno puedes decir: qué hay enfrente, o toma la foto, para que te describa lo que ve. " +
             "Repite, o dilo otra vez, para escuchar la última descripción. " +
+            "Elige una foto, para que describa una imagen que ya tienes en tu teléfono; tú eliges cuál y solo veo esa. " +
             "Leer texto, para cambiar al lector de texto. " +
             "Atrás, para volver a la cámara. " + MORE
 

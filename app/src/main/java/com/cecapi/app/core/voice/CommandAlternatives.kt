@@ -41,6 +41,7 @@ object CommandAlternatives {
                 "Siguiente párrafo: siguiente o adelante. Párrafo anterior: anterior. " +
                 "Detener la lectura: pausar, o silencio. Seguir: continúa, sigue o reanuda. " +
                 "Otro papel: otra foto, nueva foto, otro documento o nuevo documento. " +
+                "Usar una foto que ya tienes: elige una foto, galería, mis fotos, de mi teléfono o imagen guardada; la app solo ve la que elijas. " +
                 "Volver: atrás, volver, vuelve, regresa, regresar, salir, menú o pantalla anterior.",
         ),
         Area(
