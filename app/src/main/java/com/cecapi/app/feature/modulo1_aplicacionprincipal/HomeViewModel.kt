@@ -185,7 +185,27 @@ class HomeViewModel @Inject constructor(
     }
 
     /** Handles "repite..." (again the last request, or the last answer); anything else is remembered and run. */
+    private var pendingExit = false
+
+    /** Answers "¿Cierro la aplicación? Di sí o no." Anything else is a normal command and cancels it. */
+    private fun handlePendingConfirm(text: String): Boolean {
+        if (!pendingExit) return false
+        pendingExit = false
+        return when {
+            VoiceText.isNo(text) -> {
+                voiceEngine.speak("De acuerdo, no cierro nada.")
+                true
+            }
+            VoiceText.isYes(text) -> {
+                exitApp()
+                true
+            }
+            else -> false
+        }
+    }
+
     private fun interpretCommand(text: String) {
+        if (handlePendingConfirm(text)) return
         when (voiceMemory.repeatKind(text)) {
             VoiceMemory.Repeat.RESPONSE ->
                 voiceEngine.speak(voiceEngine.lastSpoken ?: "Todavía no he dicho nada.")
@@ -218,7 +238,10 @@ class HomeViewModel @Inject constructor(
             phoneStatus != null -> voiceEngine.speak(phoneStatus)
             volume != null -> voiceEngine.speak(volume)
             notification != null -> voiceEngine.speak(notification)
-            SessionCommands.isExitApp(text) -> exitApp()
+            SessionCommands.isExitApp(text) -> {
+                pendingExit = true
+                voiceEngine.speak("¿Cierro la aplicación? Di sí o no.", listenAfter = true)
+            }
             VoiceText.normalize(text).let { "configuracion" in it || "ajustes" in it } -> onSettingsSelected()
             SessionCommands.isLogout(text) -> voiceEngine.speak("No tienes una sesión abierta.")
             CommandCatalog.isRequest(text) -> voiceEngine.speak(CommandCatalog.HOME)

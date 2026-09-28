@@ -100,6 +100,7 @@ object CommandCatalog {
             "Da acceso a notificaciones, para abrir los ajustes de Android y que pueda leerlas. " +
             "Activa o desactiva escuchar fuera de la aplicación. " +
             "Cuánto espacio tengo, para el reporte de almacenamiento. Libera espacio, para borrar las fotos de más de un mes; te pido que confirmes con sí o no. " +
+            "Limpia la caché, para borrar archivos temporales. " +
             "Activa o desactiva el modo simple. " +
             "Cerrar sesión. Atrás, para volver al menú. " + MORE
 }

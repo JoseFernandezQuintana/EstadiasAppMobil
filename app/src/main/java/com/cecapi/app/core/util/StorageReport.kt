@@ -19,6 +19,8 @@ data class StorageUsage(
     val photoBytes: Long,
     val oldPhotoCount: Int,
     val oldPhotoBytes: Long,
+    /** Temporary files the system and the libraries keep; safe to delete. */
+    val cacheBytes: Long = 0L,
 ) {
     val lowSpace: Boolean get() = freeBytes < StorageReport.LOW_SPACE_BYTES
 }
@@ -49,6 +51,7 @@ class StorageReport @Inject constructor(
             photoBytes = photos.sumOf { it.length() },
             oldPhotoCount = old.size,
             oldPhotoBytes = old.sumOf { it.length() },
+            cacheBytes = cacheFolders.sumOf { folderSize(it) },
         )
     }
 
@@ -69,6 +72,39 @@ class StorageReport @Inject constructor(
         count to bytes
     }
 
+    private val cacheFolders: List<File>
+        get() = listOfNotNull(context.cacheDir, context.externalCacheDir)
+
+    /** Free space on the phone right now; cheap enough to ask before saving a photo. */
+    fun freeBytesNow(): Long = StatFs(context.filesDir.path).availableBytes
+
+    /** True when there is so little room that saving a photo could make the phone struggle. */
+    fun criticallyLow(): Boolean = freeBytesNow() < CRITICAL_SPACE_BYTES
+
+    /** Empties the temporary files. Returns the bytes given back. Nothing the person made lives here. */
+    suspend fun clearCache(): Long = withContext(Dispatchers.IO) { deleteCacheFiles(olderThan = Long.MAX_VALUE) }
+
+    /** Deletes only the temporary files older than [STALE_CACHE_DAYS] days; runs quietly at startup. */
+    suspend fun cleanStaleCache(): Long = withContext(Dispatchers.IO) {
+        deleteCacheFiles(olderThan = System.currentTimeMillis() - STALE_CACHE_MILLIS)
+    }
+
+    private fun deleteCacheFiles(olderThan: Long): Long {
+        var freed = 0L
+        cacheFolders.forEach { root ->
+            // Children first, so folders that end up empty can go too. The cache root itself stays.
+            root.walkBottomUp().filter { it != root }.forEach { entry ->
+                if (entry.isFile && entry.lastModified() < olderThan) {
+                    val size = entry.length()
+                    if (entry.delete()) freed += size
+                } else if (entry.isDirectory && entry.list().isNullOrEmpty()) {
+                    entry.delete()
+                }
+            }
+        }
+        return freed
+    }
+
     /** "1,2 GB" or "35 MB": short enough to be said out loud. */
     fun format(bytes: Long): String {
         val mb = bytes / (1024.0 * 1024.0)
@@ -84,6 +120,7 @@ class StorageReport @Inject constructor(
         append("Al teléfono le quedan ${format(usage.freeBytes)} libres de ${format(usage.totalBytes)}. ")
         append("La aplicación ocupa ${format(usage.appBytes)}. ")
         append("Guarda ${usage.photoCount} fotos que ocupan ${format(usage.photoBytes)}. ")
+        if (usage.cacheBytes > 0) append("La memoria temporal ocupa ${format(usage.cacheBytes)}. ")
         if (usage.lowSpace) append("Queda poco espacio. Te conviene liberar espacio. ")
     }
 
@@ -95,6 +132,13 @@ class StorageReport @Inject constructor(
         const val LOW_SPACE_BYTES = 500L * 1024 * 1024
 
         const val OLD_PHOTO_DAYS = 30
+
+        /** Below this the app does not save new photos: the phone needs room to keep working. */
+        const val CRITICAL_SPACE_BYTES = 100L * 1024 * 1024
+
+        /** Temporary files older than this are cleaned automatically at startup. */
+        const val STALE_CACHE_DAYS = 3
+        private const val STALE_CACHE_MILLIS = STALE_CACHE_DAYS * 24L * 60 * 60 * 1000
         private const val OLD_PHOTO_MILLIS = OLD_PHOTO_DAYS * 24L * 60 * 60 * 1000
 
         // Where the reader and Entorno save their photos (inside the app's private files folder).

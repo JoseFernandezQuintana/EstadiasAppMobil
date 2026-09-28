@@ -26,6 +26,7 @@ import com.cecapi.app.core.ui.BlackScreen
 import com.cecapi.app.core.ui.LocalVoiceHelp
 import com.cecapi.app.core.ui.VoiceHelp
 import com.cecapi.app.core.util.DisplayControl
+import com.cecapi.app.core.util.StorageReport
 import com.cecapi.app.core.util.VolumeControl
 import com.cecapi.app.core.voice.DeviceSettings
 import com.cecapi.app.core.voice.GlobalVoiceCommands
@@ -46,6 +47,7 @@ class MainActivity : ComponentActivity() {
     @Inject lateinit var wakeWordController: WakeWordController
     @Inject lateinit var volumeControl: VolumeControl
     @Inject lateinit var displayControl: DisplayControl
+    @Inject lateinit var storageReport: StorageReport
 
     // Injecting it is what makes the saved voice speed and cue settings apply at startup.
     @Inject lateinit var deviceSettings: DeviceSettings
@@ -107,6 +109,8 @@ class MainActivity : ComponentActivity() {
         volumeControlStream = AudioManager.STREAM_MUSIC
         // A blind user cannot tell whether the screen went dark, so keep it on while the app is open.
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        // Quiet housekeeping: temporary files older than a few days are of no use to anyone.
+        lifecycleScope.launch { storageReport.cleanStaleCache() }
         // Minimum brightness is set on this window only, so it ignores automatic brightness while the app
         // is open and the phone is back to normal as soon as the app is left.
         lifecycleScope.launch {

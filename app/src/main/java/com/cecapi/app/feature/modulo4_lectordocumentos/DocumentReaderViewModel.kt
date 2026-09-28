@@ -4,6 +4,7 @@ import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.cecapi.app.core.navigation.CecapiDestinations
+import com.cecapi.app.core.util.StorageReport
 import com.cecapi.app.core.voice.AssistantMode
 import com.cecapi.app.core.voice.FeedbackCues
 import com.cecapi.app.core.voice.VoiceEngine
@@ -42,6 +43,7 @@ class DocumentReaderViewModel @Inject constructor(
     private val sessionRepository: SessionRepository,
     private val repository: DocumentReaderRepository,
     private val cues: FeedbackCues,
+    private val storageReport: StorageReport,
 ) : ViewModel() {
 
     val voiceState: StateFlow<VoiceState> = voiceEngine.state.stateIn(
@@ -115,8 +117,21 @@ class DocumentReaderViewModel @Inject constructor(
 
     /** Reading needs a signed-in person because every document is saved to their history. */
     private fun sesionIniciada(): Boolean {
-        if (sessionRepository.currentUser.value != null) return true
-        voiceEngine.speak(VoiceMessages.NEEDS_LOGIN)
+        if (sessionRepository.currentUser.value == null) {
+            voiceEngine.speak(VoiceMessages.NEEDS_LOGIN)
+            return false
+        }
+        return hayEspacio()
+    }
+
+    /** Every photo is kept on the phone, so with almost no room left it is better to say so than to fill it. */
+    private fun hayEspacio(): Boolean {
+        if (!storageReport.criticallyLow()) return true
+        cues.play(FeedbackCues.Cue.WARNING)
+        voiceEngine.speak(
+            "Queda muy poco espacio en el teléfono y no puedo guardar más fotos. " +
+                "Ve a configuración y di libera espacio, o limpia la caché.",
+        )
         return false
     }
 

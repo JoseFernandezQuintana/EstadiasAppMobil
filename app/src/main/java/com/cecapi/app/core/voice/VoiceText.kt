@@ -29,6 +29,18 @@ object VoiceText {
         .replace(Regex("\\s+"), " ")
         .trim()
 
+    private val YES_WORDS = setOf(
+        "si", "claro", "dale", "ok", "okey", "supuesto", "afirmativo", "correcto", "seguro", "hazlo", "confirmo",
+        "confirmar", "adelante", "exacto", "listo",
+    )
+    private val NO_WORDS = setOf("no", "nunca", "negativo", "olvidalo", "dejalo", "cancela", "cancelar", "nel")
+
+    /** A whole-word "no" (or a synonym) in [spoken]. It wins over a "si" in the same phrase: "no, sí, mejor no". */
+    fun isNo(spoken: String): Boolean = normalize(spoken).split(" ").any { it in NO_WORDS }
+
+    /** A whole-word "sí" (or a synonym) in [spoken], and no "no" with it. */
+    fun isYes(spoken: String): Boolean = !isNo(spoken) && normalize(spoken).split(" ").any { it in YES_WORDS }
+
     /** [fold] with repeated spaces collapsed: "¡Ingresa, el usuario!" -> "ingresa el usuario". */
     fun normalize(text: String): String = fold(text).trim().replace(Regex("\\s+"), " ")
 

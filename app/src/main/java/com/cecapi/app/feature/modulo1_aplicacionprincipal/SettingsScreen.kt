@@ -204,6 +204,12 @@ fun SettingsScreen(
                     viewModel::askClean,
                 )
                 ActionButton(
+                    "Vaciar memoria temporal",
+                    "Vaciar memoria temporal. Borra archivos temporales que la aplicación y sus librerías guardan para ir más rápido. " +
+                        "No borra tus chats ni nada que hayas hecho. También puedes decir: limpia la caché.",
+                    viewModel::clearCache,
+                )
+                ActionButton(
                     "Escuchar el reporte",
                     "Escuchar el reporte. Te digo cuánto espacio libre queda y cuánto ocupa la aplicación. " +
                         "También puedes decir: cuánto espacio tengo.",

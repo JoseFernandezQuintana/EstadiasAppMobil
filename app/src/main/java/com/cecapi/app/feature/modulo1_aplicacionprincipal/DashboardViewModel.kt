@@ -17,6 +17,7 @@ import com.cecapi.app.notifications.NotificationReader
 import com.cecapi.app.core.voice.VoiceEngine
 import com.cecapi.app.core.voice.VoiceMemory
 import com.cecapi.app.core.voice.VoiceState
+import com.cecapi.app.core.voice.VoiceText
 import com.cecapi.app.core.voice.WakeWordController
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.delay
@@ -113,7 +114,29 @@ class DashboardViewModel @Inject constructor(
     }
 
     /** Handles "repite..." (again the last request, or the last answer); anything else is remembered and run. */
+    private enum class PendingConfirm { EXIT, LOGOUT }
+
+    private var pendingConfirm: PendingConfirm? = null
+
+    /** Answers the "¿Cierro...? Di sí o no." question. Anything else is a normal command and cancels it. */
+    private fun handlePendingConfirm(text: String): Boolean {
+        val action = pendingConfirm ?: return false
+        pendingConfirm = null
+        return when {
+            VoiceText.isNo(text) -> {
+                voiceEngine.speak("De acuerdo, no cierro nada.")
+                true
+            }
+            VoiceText.isYes(text) -> {
+                if (action == PendingConfirm.EXIT) exitApp() else onLogout()
+                true
+            }
+            else -> false
+        }
+    }
+
     private fun interpretCommand(text: String) {
+        if (handlePendingConfirm(text)) return
         when (voiceMemory.repeatKind(text)) {
             VoiceMemory.Repeat.RESPONSE ->
                 voiceEngine.speak(voiceEngine.lastSpoken ?: "Todavía no he dicho nada.")
@@ -150,12 +173,15 @@ class DashboardViewModel @Inject constructor(
             voiceEngine.speak(message)
             return
         }
+        // Leaving is hard to undo for someone who cannot see the screen, and a misheard word must not do it.
         if (SessionCommands.isExitApp(text)) {
-            exitApp()
+            pendingConfirm = PendingConfirm.EXIT
+            voiceEngine.speak("¿Cierro la aplicación? Di sí o no.", listenAfter = true)
             return
         }
         if (SessionCommands.isLogout(text)) {
-            onLogout()
+            pendingConfirm = PendingConfirm.LOGOUT
+            voiceEngine.speak("¿Cierro tu sesión? Di sí o no.", listenAfter = true)
             return
         }
         if (ModuleVoice.isListRequest(text)) {

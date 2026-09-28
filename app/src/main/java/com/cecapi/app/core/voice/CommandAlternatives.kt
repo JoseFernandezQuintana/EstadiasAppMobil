@@ -104,6 +104,7 @@ object CommandAlternatives {
                 "Modo simple: activa o desactiva el modo simple. " +
                 "Almacenamiento: cuánto espacio tengo, espacio libre, almacenamiento o cuánto ocupa. " +
                 "Liberar: libera espacio, liberar espacio, libera memoria, limpia el espacio o borra las fotos. " +
+                "Caché: limpia la caché, borra la caché, vacía la caché, libera la caché o borra los archivos temporales. " +
                 "Cuenta: cerrar sesión, cierra mi sesión o salir de la cuenta.",
         ),
         Area(

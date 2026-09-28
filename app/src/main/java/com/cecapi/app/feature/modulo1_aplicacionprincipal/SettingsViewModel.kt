@@ -95,6 +95,8 @@ class SettingsViewModel @Inject constructor(
             CommandCatalog.isRequest(spoken) -> voiceEngine.speak(CommandCatalog.SETTINGS, listenAfter = true)
             cleaning && hasWord("si", "claro", "dale", "ok", "okey", "supuesto", "afirmativo", "correcto", "seguro", "hazlo", "confirmo", "borralas", "adelante") -> confirmClean()
             cleaning && hasWord("no", "nunca", "negativo", "olvidalo", "dejalo", "cancela", "cancelar") -> cancelClean()
+            has("cache", "memoria temporal", "archivos temporales", "temporales") &&
+                has("limpia", "limpiar", "borra", "borrar", "vacia", "vaciar", "libera", "liberar", "elimina") -> clearCache()
             has("cuanto espacio", "espacio libre", "almacenamiento", "cuanto ocupa") -> speakStorage()
             has("libera espacio", "liberar espacio", "libera memoria", "limpia el espacio", "limpiar espacio", "borra las fotos", "borrar las fotos") ->
                 askClean()
@@ -158,6 +160,20 @@ class SettingsViewModel @Inject constructor(
             _storage.value = storageReport.read()
             cues.play(FeedbackCues.Cue.SUCCESS)
             voiceEngine.speak("Listo, borré $count fotos y liberé ${storageReport.format(bytes)}.", listenAfter = true)
+        }
+    }
+
+    /** The temporary files hold nothing the person made, so no question is asked; the answer says how much came back. */
+    fun clearCache() {
+        viewModelScope.launch {
+            val freed = storageReport.clearCache()
+            _storage.value = storageReport.read()
+            cues.play(FeedbackCues.Cue.SUCCESS)
+            voiceEngine.speak(
+                if (freed > 0) "Listo, vacié la memoria temporal y liberé ${storageReport.format(freed)}."
+                else "La memoria temporal ya estaba vacía.",
+                listenAfter = true,
+            )
         }
     }
 

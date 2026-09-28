@@ -4,6 +4,7 @@ import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.cecapi.app.core.navigation.CecapiDestinations
+import com.cecapi.app.core.util.StorageReport
 import com.cecapi.app.core.voice.FeedbackCues
 import com.cecapi.app.core.voice.VoiceEngine
 import com.cecapi.app.core.voice.VoiceMessages
@@ -34,6 +35,7 @@ class EnvironmentViewModel @Inject constructor(
     private val sessionRepository: SessionRepository,
     private val repository: EnvironmentRepository,
     private val cues: FeedbackCues,
+    private val storageReport: StorageReport,
 ) : ViewModel() {
 
     val voiceState: StateFlow<VoiceState> = voiceEngine.state.stateIn(
@@ -91,9 +93,20 @@ class EnvironmentViewModel @Inject constructor(
 
     /** Descriptions are saved to the person's history, so a signed-in user is needed. */
     private fun sesionIniciada(): Boolean {
-        if (sessionRepository.currentUser.value != null) return true
-        voiceEngine.speak(VoiceMessages.NEEDS_LOGIN)
-        return false
+        if (sessionRepository.currentUser.value == null) {
+            voiceEngine.speak(VoiceMessages.NEEDS_LOGIN)
+            return false
+        }
+        // Every photo is kept on the phone, so with almost no room left it is better to say so than to fill it.
+        if (storageReport.criticallyLow()) {
+            cues.play(FeedbackCues.Cue.WARNING)
+            voiceEngine.speak(
+                "Queda muy poco espacio en el teléfono y no puedo guardar más fotos. " +
+                    "Ve a configuración y di libera espacio, o limpia la caché.",
+            )
+            return false
+        }
+        return true
     }
 
     /** Also what the on-screen button and the "qué hay enfrente" chip call. */
