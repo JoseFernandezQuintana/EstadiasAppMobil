@@ -2,32 +2,31 @@ package com.cecapi.app.feature.modulo4_lectordocumentos
 
 import android.Manifest
 import android.content.pm.PackageManager
-import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageCapture
-import androidx.camera.core.ImageCaptureException
-import androidx.camera.core.Preview
-import androidx.camera.lifecycle.ProcessCameraProvider
-import androidx.camera.view.PreviewView
-import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CameraAlt
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Replay
+import androidx.compose.material.icons.filled.SkipNext
+import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -37,7 +36,6 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -45,7 +43,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalInspectionMode
-import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
@@ -55,66 +52,46 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview as ComposePreview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.cecapi.app.core.theme.CecapiAccent
+import com.cecapi.app.core.theme.CecapiBackground
+import com.cecapi.app.core.theme.CecapiBorder
+import com.cecapi.app.core.theme.CecapiSurfaceElevated
+import com.cecapi.app.core.theme.CecapiTextMuted
+import com.cecapi.app.core.theme.CecapiTextPrimary
+import com.cecapi.app.core.theme.ModuleCameraAccent
+import com.cecapi.app.core.theme.ModuleLearningAccent
+import com.cecapi.app.core.ui.CameraViewfinder
+import com.cecapi.app.core.ui.CaptureButton
+import com.cecapi.app.core.ui.FramingGuide
+import com.cecapi.app.core.ui.ScreenTopBar
+import com.cecapi.app.core.ui.SuggestionChip
 import com.cecapi.app.core.ui.VoiceCaptionBubble
 import com.cecapi.app.core.ui.capturePhoto
-import kotlinx.coroutines.launch
-import java.io.File
 
 @Composable
 fun DocumentReaderScreen(
-    onBack: () -> Unit = {},
-    onNavigateToMenu: () -> Unit = {},
+    onBack: () -> Unit,
     onOpen: (String) -> Unit = {},
     viewModel: DocumentReaderViewModel = hiltViewModel(),
 ) {
-    val uiState by viewModel.uiState.collectAsState()
-
-    LaunchedEffect(Unit) { viewModel.back.collect { onBack() } }
-    LaunchedEffect(Unit) { viewModel.routes.collect(onOpen) }
-
-    if (uiState.recognizedText != null && !uiState.isProcessing) {
-        AudioControlScreen(
-            uiState = uiState,
-            onPauseResume = viewModel::onPauseResumeToggle,
-            onRepeatFromStart = viewModel::onRepeatFromStartRequested,
-            onRetakePhoto = viewModel::onResetToCameraRequested,
-            onNavigateToMenu = { viewModel.onNavigateToMenuRequested(onNavigateToMenu) },
-        )
-    } else {
-        CameraCaptureScreen(
-            uiState = uiState,
-            onPhotoCaptured = viewModel::onPhotoCaptured,
-            onNavigateToMenu = { viewModel.onNavigateToMenuRequested(onNavigateToMenu) },
-        )
-    }
-}
-
-/**
- * Pantalla 1 del Prototipo Beta: Vista de Cámara a Pantalla Completa con Botón Volver al Menú Rojo
- */
-@Composable
-private fun CameraCaptureScreen(
-    uiState: DocumentReaderUiState,
-    onPhotoCaptured: (imageUri: Uri, rutaImagen: String) -> Unit,
-    onNavigateToMenu: () -> Unit,
-) {
     val context = LocalContext.current
-    val lifecycleOwner = LocalLifecycleOwner.current
-    val coroutineScope = rememberCoroutineScope()
+    val uiState by viewModel.uiState.collectAsState()
     val isPreview = LocalInspectionMode.current
 
     var hasCameraPermission by remember {
         mutableStateOf(
             isPreview || ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) ==
-                    PackageManager.PERMISSION_GRANTED,
+                PackageManager.PERMISSION_GRANTED,
         )
     }
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
-    ) { granted -> hasCameraPermission = granted }
+    ) { granted ->
+        hasCameraPermission = granted
+        if (!granted) viewModel.onCameraPermissionDenied()
+    }
 
     LaunchedEffect(Unit) {
         if (!isPreview && !hasCameraPermission) permissionLauncher.launch(Manifest.permission.CAMERA)
@@ -122,333 +99,393 @@ private fun CameraCaptureScreen(
 
     var imageCapture by remember { mutableStateOf<ImageCapture?>(null) }
 
-    val backgroundColor = Color(0xFF070B1E)
-    val targetBlue = Color(0xFF00B2FF)
-    val menuRed = Color(0xFF900000)
-
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(backgroundColor),
-    ) {
-        // Vista de Cámara a Pantalla Completa (Sin marco blanco)
-        if (isPreview) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    imageVector = Icons.Default.CameraAlt,
-                    contentDescription = null,
-                    tint = Color.DarkGray,
-                    modifier = Modifier.size(80.dp),
-                )
-            }
-        } else if (hasCameraPermission) {
-            AndroidView(
-                modifier = Modifier.fillMaxSize(),
-                factory = { ctx ->
-                    val previewView = PreviewView(ctx)
-                    val cameraProviderFuture = ProcessCameraProvider.getInstance(ctx)
-                    cameraProviderFuture.addListener({
-                        val cameraProvider = cameraProviderFuture.get()
-                        val preview = Preview.Builder().build().also { p ->
-                            p.setSurfaceProvider(previewView.surfaceProvider)
-                        }
-                        val capture = ImageCapture.Builder().build()
-                        imageCapture = capture
-                        try {
-                            cameraProvider.unbindAll()
-                            cameraProvider.bindToLifecycle(
-                                lifecycleOwner,
-                                CameraSelector.DEFAULT_BACK_CAMERA,
-                                preview,
-                                capture,
-                            )
-                        } catch (_: Exception) {
-                            // Sin cámara disponible (ej. emulador)
-                        }
-                    }, ContextCompat.getMainExecutor(ctx))
-                    previewView
-                },
-            )
+    val takePhoto: () -> Unit = {
+        val capture = imageCapture
+        if (capture == null) {
+            viewModel.onCaptureFailed()
         } else {
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    "Se necesita permiso de cámara.",
-                    color = Color.White,
-                    modifier = Modifier.padding(16.dp),
-                )
-            }
+            capture.capturePhoto(
+                context = context,
+                folder = "cecapi_docs",
+                onFailed = viewModel::onCaptureFailed,
+            ) { uri, path -> viewModel.onPhotoCaptured(uri, path) }
         }
+    }
 
-        // Botón superior izquierdo: Cuadro Rojo con símbolo '<' para volver al menú
-        Box(
-            modifier = Modifier
-                .statusBarsPadding()
-                .padding(top = 16.dp, start = 16.dp)
-                .size(64.dp)
-                .border(2.dp, Color.White, RoundedCornerShape(4.dp))
-                .clip(RoundedCornerShape(4.dp))
-                .background(menuRed)
-                .semantics {
-                    role = Role.Button
-                    contentDescription = "Volver al menú principal"
-                }
-                .clickable { onNavigateToMenu() },
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(
-                text = "<",
-                fontSize = 36.sp,
-                fontWeight = FontWeight.ExtraBold,
-                color = Color.Black,
+    LaunchedEffect(Unit) { viewModel.captureRequests.collect { takePhoto() } }
+    LaunchedEffect(Unit) { viewModel.back.collect { onBack() } }
+    LaunchedEffect(Unit) { viewModel.routes.collect(onOpen) }
+
+    val hayDocumento = uiState.parrafos.isNotEmpty()
+
+    if (hayDocumento && !uiState.isProcessing) {
+        // Pantalla 2: Interfaz futurista CECAPI de control de lectura con botones grandes de alto contraste
+        DocumentReadoutControlScreen(
+            uiState = uiState,
+            onBack = onBack,
+            onCommands = viewModel::onCommandsRequested,
+            onPause = viewModel::pausarLectura,
+            onResume = viewModel::continuarLectura,
+            onRepeat = viewModel::repetirLectura,
+            onPrevious = viewModel::anteriorParrafo,
+            onNext = viewModel::siguienteParrafo,
+            onRetakePhoto = viewModel::onResetToCameraRequested,
+        )
+    } else {
+        // Pantalla 1: Vista previa de cámara limpia a pantalla completa
+        DocumentCameraScreen(
+            uiState = uiState,
+            hasCameraPermission = hasCameraPermission,
+            onReadyCamera = { imageCapture = it },
+            onBack = onBack,
+            onCommands = viewModel::onCommandsRequested,
+            onCaptureClick = { if (viewModel.onBotonCapturaPresionado()) takePhoto() },
+            onPedirCaptura = viewModel::pedirCaptura,
+        )
+    }
+}
+
+/**
+ * Pantalla 1: Vista previa de cámara limpia a pantalla completa con guía de encuadre y obturador.
+ */
+@Composable
+private fun DocumentCameraScreen(
+    uiState: DocumentReaderUiState,
+    hasCameraPermission: Boolean,
+    onReadyCamera: (ImageCapture?) -> Unit,
+    onBack: () -> Unit,
+    onCommands: () -> Unit,
+    onCaptureClick: () -> Unit,
+    onPedirCaptura: () -> Unit,
+) {
+    val statusText = when {
+        uiState.errorMessage != null -> uiState.errorMessage
+        uiState.isProcessing -> "Procesando la imagen..."
+        uiState.capturaArmada -> "Toca otra vez para tomar la foto."
+        else -> "Apunta la cámara al papel y di toma la foto."
+    }
+
+    Box(modifier = Modifier.fillMaxSize().background(CecapiBackground)) {
+        CameraViewfinder(
+            hasPermission = hasCameraPermission,
+            onReady = onReadyCamera,
+            modifier = Modifier.fillMaxSize(),
+        )
+
+        if (hasCameraPermission) {
+            FramingGuide(
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .fillMaxWidth(0.85f)
+                    .aspectRatio(3f / 4f),
             )
         }
 
-        // Panel inferior flotante: Botón Objetivo Azul (Diana) y Leyenda de Voz
         Column(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .fillMaxWidth()
-                .padding(bottom = 20.dp, start = 16.dp, end = 16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.fillMaxSize().padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            // Botón objetivo Diana Azul
-            Box(
-                modifier = Modifier
-                    .padding(bottom = 16.dp)
-                    .size(96.dp)
-                    .clip(CircleShape)
-                    .background(targetBlue)
-                    .semantics {
-                        role = Role.Button
-                        contentDescription = "Tomar foto del documento"
-                    }
-                    .clickable(
-                        enabled = isPreview || (imageCapture != null && !uiState.isProcessing),
-                    ) {
-                        if (isPreview) return@clickable
-                        val capture = imageCapture ?: return@clickable
-                        capture.capturePhoto(
-                            context = context,
-                            folder = "cecapi_docs",
-                            onFailed = {
-                                val photoFile = File(
-                                    context.filesDir,
-                                    "cecapi_docs/scan_${System.currentTimeMillis()}.jpg",
-                                ).apply { parentFile?.mkdirs() }
-                                val outputOptions = ImageCapture.OutputFileOptions.Builder(photoFile).build()
-                                capture.takePicture(
-                                    outputOptions,
-                                    ContextCompat.getMainExecutor(context),
-                                    object : ImageCapture.OnImageSavedCallback {
-                                        override fun onImageSaved(output: ImageCapture.OutputFileResults) {
-                                            val uri = output.savedUri ?: Uri.fromFile(photoFile)
-                                            coroutineScope.launch {
-                                                onPhotoCaptured(uri, photoFile.absolutePath)
-                                            }
-                                        }
+            ScreenTopBar(
+                eyebrow = "CÁMARA",
+                title = "Leer texto",
+                onBack = onBack,
+                onCommands = onCommands,
+            )
 
-                                        override fun onError(exception: ImageCaptureException) {
-                                            // Error manejado en ViewModel
-                                        }
-                                    },
-                                )
-                            },
-                        ) { uri, path ->
-                            coroutineScope.launch { onPhotoCaptured(uri, path) }
-                        }
-                    },
-                contentAlignment = Alignment.Center,
-            ) {
-                if (uiState.isProcessing) {
-                    CircularProgressIndicator(
-                        color = Color.White,
-                        modifier = Modifier.size(36.dp),
-                    )
-                } else {
-                    Box(
-                        modifier = Modifier
-                            .size(64.dp)
-                            .clip(CircleShape)
-                            .background(backgroundColor),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(32.dp)
-                                .clip(CircleShape)
-                                .background(targetBlue),
-                        )
-                    }
-                }
+            Spacer(modifier = Modifier.weight(1f))
+
+            VoiceCaptionBubble(text = statusText)
+
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
+                SuggestionChip(label = "toma la foto", onClick = onPedirCaptura)
             }
 
-            // Subtítulo / Leyenda de accesibilidad
-            VoiceCaptionBubble(
-                text = uiState.errorMessage
-                    ?: if (uiState.isProcessing) "Procesando la imagen..." else "Apunta la cámara al documento y toca el botón azul.",
+            CaptureButton(
+                processing = uiState.isProcessing,
+                enabled = !uiState.isProcessing,
+                help = "Botón de captura. Tócalo para tomar la foto del documento o di toma la foto.",
+                onClick = onCaptureClick,
+                modifier = Modifier.align(Alignment.CenterHorizontally),
             )
         }
     }
 }
 
 /**
- * Pantalla 2 del Prototipo Beta: 4 Grandes Bloques Táctiles de Alta Accesibilidad
- * 1. PAUSA (|| / ▶) - Verde Oliva (#586232)
- * 2. REPETIR DESDE EL INICIO (|<) - Rojo Carmesí (#6C1024)
- * 3. VOLVER A TOMAR FOTO (<) - Verde Esmeralda (#14723B)
- * 4. MENU (MENU) - Gris Claro (#D1D5DB)
+ * Pantalla 2: Interfaz futurista CECAPI de lectura con tarjetas/botones de alto contraste y esquinas redondeadas.
  */
 @Composable
-private fun AudioControlScreen(
+private fun DocumentReadoutControlScreen(
     uiState: DocumentReaderUiState,
-    onPauseResume: () -> Unit,
-    onRepeatFromStart: () -> Unit,
+    onBack: () -> Unit,
+    onCommands: () -> Unit,
+    onPause: () -> Unit,
+    onResume: () -> Unit,
+    onRepeat: () -> Unit,
+    onPrevious: () -> Unit,
+    onNext: () -> Unit,
     onRetakePhoto: () -> Unit,
-    onNavigateToMenu: () -> Unit,
 ) {
-    val backgroundColor = Color(0xFF070B1E)
-
-    val oliveColor = Color(0xFF586232)
-    val maroonColor = Color(0xFF6C1024)
-    val emeraldColor = Color(0xFF14723B)
-    val silverColor = Color(0xFFD1D5DB)
+    val currentParagraphText = "Párrafo ${uiState.parrafoActual + 1} de ${uiState.parrafos.size}: " +
+        (uiState.parrafos.getOrNull(uiState.parrafoActual) ?: "")
 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(backgroundColor)
-            .padding(12.dp),
+            .background(CecapiBackground)
+            .padding(14.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        // Bloque 1: PAUSAR / REANUDAR (Símbolo || o ▶)
+        ScreenTopBar(
+            eyebrow = "LECTOR",
+            title = "Documento leído",
+            onBack = onBack,
+            onCommands = onCommands,
+        )
+
+        // Subtítulo con el texto del párrafo actual
+        VoiceCaptionBubble(
+            text = if (uiState.estaLeyendo) currentParagraphText else "Lectura en pausa. Toca Reanudar o di continúa.",
+        )
+
+        // Tarjeta 1 Futurista: PAUSAR / REANUDAR
+        val pauseTint = CecapiAccent
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f)
-                .clip(RoundedCornerShape(8.dp))
-                .background(oliveColor)
+                .clip(RoundedCornerShape(24.dp))
+                .background(CecapiSurfaceElevated)
+                .border(2.dp, pauseTint, RoundedCornerShape(24.dp))
                 .semantics {
                     role = Role.Button
-                    contentDescription = if (uiState.estaPausado) "Reanudar lectura" else "Pausar lectura"
+                    contentDescription = if (uiState.estaLeyendo) "Pausar lectura" else "Reanudar lectura"
                 }
-                .clickable { onPauseResume() },
+                .clickable { if (uiState.estaLeyendo) onPause() else onResume() },
             contentAlignment = Alignment.Center,
         ) {
-            Text(
-                text = if (uiState.estaPausado) "▶" else "||",
-                fontSize = 44.sp,
-                fontWeight = FontWeight.ExtraBold,
-                color = Color.Black,
-                textAlign = TextAlign.Center,
-            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center,
+                modifier = Modifier.padding(16.dp),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(56.dp)
+                        .clip(CircleShape)
+                        .background(pauseTint.copy(alpha = 0.2f))
+                        .border(2.dp, pauseTint, CircleShape),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        imageVector = if (uiState.estaLeyendo) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                        contentDescription = null,
+                        tint = pauseTint,
+                        modifier = Modifier.size(34.dp),
+                    )
+                }
+                Spacer(modifier = Modifier.size(16.dp))
+                Text(
+                    text = if (uiState.estaLeyendo) "PAUSAR LECTURA" else "REANUDAR LECTURA",
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = CecapiTextPrimary,
+                )
+            }
         }
 
-        Spacer(modifier = Modifier.height(10.dp))
-
-        // Bloque 2: REPETIR DESDE EL INICIO (Símbolo |<)
+        // Tarjeta 2 Futurista: REPETIR DESDE EL INICIO
+        val repeatTint = ModuleLearningAccent
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f)
-                .clip(RoundedCornerShape(8.dp))
-                .background(maroonColor)
+                .clip(RoundedCornerShape(24.dp))
+                .background(CecapiSurfaceElevated)
+                .border(2.dp, repeatTint, RoundedCornerShape(24.dp))
                 .semantics {
                     role = Role.Button
                     contentDescription = "Repetir lectura desde el inicio"
                 }
-                .clickable { onRepeatFromStart() },
+                .clickable { onRepeat() },
             contentAlignment = Alignment.Center,
         ) {
-            Text(
-                text = "|<",
-                fontSize = 44.sp,
-                fontWeight = FontWeight.ExtraBold,
-                color = Color.Black,
-                textAlign = TextAlign.Center,
-            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center,
+                modifier = Modifier.padding(16.dp),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(56.dp)
+                        .clip(CircleShape)
+                        .background(repeatTint.copy(alpha = 0.2f))
+                        .border(2.dp, repeatTint, CircleShape),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Replay,
+                        contentDescription = null,
+                        tint = repeatTint,
+                        modifier = Modifier.size(32.dp),
+                    )
+                }
+                Spacer(modifier = Modifier.size(16.dp))
+                Text(
+                    text = "REPETIR LECTURA",
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = CecapiTextPrimary,
+                )
+            }
         }
 
-        Spacer(modifier = Modifier.height(10.dp))
+        // Tarjeta 3 Futurista: NAVEGACIÓN DE PÁRRAFOS (ANTERIOR / SIGUIENTE)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            val navBorder = CecapiBorder
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxSize()
+                    .clip(RoundedCornerShape(24.dp))
+                    .background(CecapiSurfaceElevated)
+                    .border(2.dp, navBorder, RoundedCornerShape(24.dp))
+                    .semantics {
+                        role = Role.Button
+                        contentDescription = "Ir al párrafo anterior"
+                    }
+                    .clickable { onPrevious() },
+                contentAlignment = Alignment.Center,
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center,
+                    modifier = Modifier.padding(12.dp),
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.SkipPrevious,
+                        contentDescription = null,
+                        tint = CecapiAccent,
+                        modifier = Modifier.size(32.dp),
+                    )
+                    Spacer(modifier = Modifier.size(8.dp))
+                    Text(
+                        text = "ANTERIOR",
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = CecapiTextPrimary,
+                    )
+                }
+            }
 
-        // Bloque 3: VOLVER A TOMAR FOTO (Símbolo <)
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxSize()
+                    .clip(RoundedCornerShape(24.dp))
+                    .background(CecapiSurfaceElevated)
+                    .border(2.dp, navBorder, RoundedCornerShape(24.dp))
+                    .semantics {
+                        role = Role.Button
+                        contentDescription = "Ir al párrafo siguiente"
+                    }
+                    .clickable { onNext() },
+                contentAlignment = Alignment.Center,
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center,
+                    modifier = Modifier.padding(12.dp),
+                ) {
+                    Text(
+                        text = "SIGUIENTE",
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = CecapiTextPrimary,
+                    )
+                    Spacer(modifier = Modifier.size(8.dp))
+                    Icon(
+                        imageVector = Icons.Filled.SkipNext,
+                        contentDescription = null,
+                        tint = CecapiAccent,
+                        modifier = Modifier.size(32.dp),
+                    )
+                }
+            }
+        }
+
+        // Tarjeta 4 Futurista: TOMAR OTRA FOTO
+        val cameraTint = ModuleCameraAccent
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f)
-                .clip(RoundedCornerShape(8.dp))
-                .background(emeraldColor)
+                .clip(RoundedCornerShape(24.dp))
+                .background(CecapiSurfaceElevated)
+                .border(2.dp, cameraTint, RoundedCornerShape(24.dp))
                 .semantics {
                     role = Role.Button
-                    contentDescription = "Volver a tomar foto"
+                    contentDescription = "Tomar otra foto"
                 }
                 .clickable { onRetakePhoto() },
             contentAlignment = Alignment.Center,
         ) {
-            Text(
-                text = "<",
-                fontSize = 44.sp,
-                fontWeight = FontWeight.ExtraBold,
-                color = Color.Black,
-                textAlign = TextAlign.Center,
-            )
-        }
-
-        Spacer(modifier = Modifier.height(10.dp))
-
-        // Bloque 4: MENU (Texto MENU)
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f)
-                .clip(RoundedCornerShape(8.dp))
-                .background(silverColor)
-                .semantics {
-                    role = Role.Button
-                    contentDescription = "Volver al menú principal"
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center,
+                modifier = Modifier.padding(16.dp),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(56.dp)
+                        .clip(CircleShape)
+                        .background(cameraTint.copy(alpha = 0.2f))
+                        .border(2.dp, cameraTint, CircleShape),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.CameraAlt,
+                        contentDescription = null,
+                        tint = cameraTint,
+                        modifier = Modifier.size(30.dp),
+                    )
                 }
-                .clickable { onNavigateToMenu() },
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(
-                text = "MENU",
-                fontSize = 32.sp,
-                fontWeight = FontWeight.ExtraBold,
-                color = Color.Black,
-                textAlign = TextAlign.Center,
-            )
+                Spacer(modifier = Modifier.size(16.dp))
+                Text(
+                    text = "TOMAR OTRA FOTO",
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = CecapiTextPrimary,
+                )
+            }
         }
     }
 }
 
-@ComposePreview(showBackground = true, name = "Camera View Full Screen Beta")
+@ComposePreview(showBackground = true, name = "Futuristic Document Readout Control Screen")
 @Composable
-private fun CameraCaptureScreenPreview() {
+private fun DocumentReadoutControlScreenPreview() {
     MaterialTheme {
-        CameraCaptureScreen(
-            uiState = DocumentReaderUiState(),
-            onPhotoCaptured = { _, _ -> },
-            onNavigateToMenu = {},
-        )
-    }
-}
-
-@ComposePreview(showBackground = true, name = "Audio Control 4 Buttons Beta")
-@Composable
-private fun AudioControlScreenPreview() {
-    MaterialTheme {
-        AudioControlScreen(
-            uiState = DocumentReaderUiState(recognizedText = "Texto de prueba"),
-            onPauseResume = {},
-            onRepeatFromStart = {},
+        DocumentReadoutControlScreen(
+            uiState = DocumentReaderUiState(
+                recognizedText = "Texto de ejemplo para la vista previa.",
+                parrafos = listOf("Este es el primer párrafo del documento leído.", "Este es el segundo párrafo del documento."),
+                parrafoActual = 0,
+                estaLeyendo = true,
+            ),
+            onBack = {},
+            onCommands = {},
+            onPause = {},
+            onResume = {},
+            onRepeat = {},
+            onPrevious = {},
+            onNext = {},
             onRetakePhoto = {},
-            onNavigateToMenu = {},
         )
     }
 }
