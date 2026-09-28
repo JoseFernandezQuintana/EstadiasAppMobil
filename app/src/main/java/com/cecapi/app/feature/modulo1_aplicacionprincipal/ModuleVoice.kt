@@ -36,13 +36,13 @@ object ModuleVoice {
 
     fun isListRequest(spoken: String): Boolean {
         val text = VoiceText.normalize(spoken)
-        return listOf("modulos", "opciones", "menu").any { it in text }
+        return listOf("modulos", "opciones", "menu").let { phrases -> VoiceText.hasAny(text, phrases) }
     }
 
     /** The menu entry named in [spoken], or null. */
     fun matchKey(spoken: String, menu: List<MenuItem>): String? {
         val text = VoiceText.normalize(spoken)
-        return keywords.firstOrNull { (key, words) -> menu.any { it.key == key } && words.any { it in text } }?.first
+        return keywords.firstOrNull { (key, words) -> menu.any { it.key == key } && VoiceText.hasAny(text, words) }?.first
     }
 
     /**
@@ -52,8 +52,8 @@ object ModuleVoice {
     fun directCameraRoute(spoken: String): String? {
         val text = VoiceText.normalize(spoken)
         return when {
-            listOf("enfrente", "entorno", "describe", "descripcion").any { it in text } -> CecapiDestinations.ENVIRONMENT
-            listOf("leer texto", "lee este", "lee esto", "leer documento", "lee el texto").any { it in text } ->
+            listOf("enfrente", "entorno", "describe", "descripcion").let { phrases -> VoiceText.hasAny(text, phrases) } -> CecapiDestinations.ENVIRONMENT
+            listOf("leer texto", "lee este", "lee esto", "leer documento", "lee el texto").let { phrases -> VoiceText.hasAny(text, phrases) } ->
                 CecapiDestinations.DOCUMENT_READER
             else -> null
         }

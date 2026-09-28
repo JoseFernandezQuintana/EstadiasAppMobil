@@ -141,15 +141,15 @@ class ChatsViewModel @Inject constructor(
     /** The commands this screen answers, most specific first. */
     private fun onSpeech(spoken: String) {
         val text = VoiceText.normalize(spoken)
-        fun has(vararg words: String) = words.any { it in text }
+        fun has(vararg words: String) = VoiceText.hasAny(text, *words)
         // "si" and "no" must be whole words: "siguiente" contains "si".
         val spokenWords = text.split(" ")
         fun hasWord(vararg words: String) = words.any { it in spokenWords }
         val pending = _state.value.pending
         when {
             CommandCatalog.isRequest(spoken) -> onCommandsRequested()
-            pending != PendingDelete.NONE && hasWord("si", "confirmo", "confirmar", "borralo", "borralos", "adelante") -> confirmDelete()
-            pending != PendingDelete.NONE && hasWord("no", "cancela", "cancelar") -> cancelDelete()
+            pending != PendingDelete.NONE && hasWord("si", "claro", "dale", "ok", "okey", "supuesto", "afirmativo", "correcto", "seguro", "hazlo", "confirmo", "confirmar", "borralo", "borralos", "adelante") -> confirmDelete()
+            pending != PendingDelete.NONE && hasWord("no", "nunca", "negativo", "olvidalo", "dejalo", "cancela", "cancelar") -> cancelDelete()
             has("borra todos", "borrar todos", "elimina todos", "eliminar todos", "vacia") -> askDeleteAll()
             has("borra este", "borrar este", "elimina este", "eliminar este", "borra el chat", "borra el actual") -> askDeleteCurrent()
             has("cuantos") -> speakCount()
@@ -161,7 +161,7 @@ class ChatsViewModel @Inject constructor(
                 voiceEngine.speak("Para un chat nuevo, vuelve al menú y háblame. Cada conversación se guarda aquí sola.")
                 _back.tryEmit(Unit)
             }
-            has("atras", "volver", "salir", "menu", "regresa") -> _back.tryEmit(Unit)
+            has("atras", "volver", "vuelve", "regresa", "regresar", "salir", "menu", "inicio", "pantalla anterior") -> _back.tryEmit(Unit)
             else -> {
                 cues.play(FeedbackCues.Cue.NOT_UNDERSTOOD)
                 voiceEngine.speak("No entendí. " + CommandCatalog.hint("chats"), listenAfter = true)

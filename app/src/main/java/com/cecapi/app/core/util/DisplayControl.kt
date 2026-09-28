@@ -38,19 +38,19 @@ class DisplayControl @Inject constructor(
     fun handle(spoken: String): String? {
         val text = VoiceText.normalize(spoken)
         return when {
-            BLACK_OFF_PHRASES.any { it in text } -> {
+            BLACK_OFF_PHRASES.let { phrases -> VoiceText.hasAny(text, phrases) } -> {
                 scope.launch { deviceSettings.setBlackScreen(false) }
                 BLACK_OFF
             }
-            BLACK_ON_PHRASES.any { it in text } -> {
+            BLACK_ON_PHRASES.let { phrases -> VoiceText.hasAny(text, phrases) } -> {
                 scope.launch { deviceSettings.setBlackScreen(true) }
                 BLACK_ON
             }
-            BRIGHTNESS_NORMAL_PHRASES.any { it in text } -> {
+            BRIGHTNESS_NORMAL_PHRASES.let { phrases -> VoiceText.hasAny(text, phrases) } -> {
                 scope.launch { deviceSettings.setMinBrightness(false) }
                 BRIGHTNESS_NORMAL
             }
-            BRIGHTNESS_MIN_PHRASES.any { it in text } -> {
+            BRIGHTNESS_MIN_PHRASES.let { phrases -> VoiceText.hasAny(text, phrases) } -> {
                 scope.launch { deviceSettings.setMinBrightness(true) }
                 BRIGHTNESS_MIN
             }

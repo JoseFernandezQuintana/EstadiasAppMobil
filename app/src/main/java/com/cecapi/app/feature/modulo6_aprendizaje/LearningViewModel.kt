@@ -146,19 +146,19 @@ class LearningViewModel @Inject constructor(
     /** The commands this screen answers. "Atrás" is not one: it is also an answer in level 3. */
     private fun onSpeech(spoken: String) {
         val text = VoiceText.normalize(spoken)
-        fun has(vararg words: String) = words.any { it in text }
-        val chosenLevel = LEVEL_COMMAND.find(text)?.groupValues?.get(1)
+        fun has(vararg words: String) = VoiceText.hasAny(text, *words)
+        val chosenLevel = LEVEL_COMMAND.find(text)?.groupValues?.let { it[1].ifEmpty { it[2] } }
         when {
             CommandCatalog.isRequest(spoken) -> {
                 stopStimulus()
                 voiceEngine.speak(CommandCatalog.ACTIVITIES, listenAfter = true)
             }
-            has("vibracion", "vibraciones") -> setMode(ActivityMode.VIBRATION)
-            has("sonidos", "audio", "escuchar sonidos") -> setMode(ActivityMode.AUDIO)
+            has("vibracion", "vibraciones", "vibrar", "vibra", "vibrador", "con vibracion") -> setMode(ActivityMode.VIBRATION)
+            has("sonidos", "sonido", "audio", "audios", "escuchar sonidos", "oido", "oidos") -> setMode(ActivityMode.AUDIO)
             chosenLevel != null -> setLevel(levelNumber(chosenLevel))
-            has("repite", "repetir", "otra vez", "de nuevo", "escuchalo") -> repeat()
-            has("siguiente", "proximo", "continua", "otro ejercicio") -> next()
-            has("volver", "salir", "menu", "regresar", "terminar") -> {
+            has("repite", "repetir", "repiteme", "otra vez", "de nuevo", "escuchalo", "ponlo otra vez", "vuelve a poner", "vuelve a sonar", "no alcance a oir", "no escuche") -> repeat()
+            has("siguiente", "proximo", "continua", "continuar", "sigue", "el que sigue", "otro ejercicio", "otro", "adelante", "pasa al siguiente", "pasa") -> next()
+            has("volver", "vuelve", "salir", "menu", "regresar", "regresa", "terminar", "termina", "ya no quiero", "inicio") -> {
                 stopStimulus()
                 _back.tryEmit(Unit)
             }
@@ -168,8 +168,8 @@ class LearningViewModel @Inject constructor(
     }
 
     private fun levelNumber(word: String): Int = when (word) {
-        "uno", "1" -> 1
-        "dos", "2" -> 2
+        "uno", "1", "primer" -> 1
+        "dos", "2", "segundo" -> 2
         else -> 3
     }
 
@@ -241,7 +241,7 @@ class LearningViewModel @Inject constructor(
     private fun answer(spoken: String) {
         val item = _state.value.current ?: return
         val correct = matches(spoken, item.answer)
-        val message = (if (correct) "Correcto" else "Incorrecto") + ", la respuesta era ${item.answer}."
+        val message = (if (correct) "Correcto" else "Incorrecto") + ", la respuesta era ${spokenAnswer(item.answer)}."
         cues.play(if (correct) FeedbackCues.Cue.SUCCESS else FeedbackCues.Cue.ERROR)
         _state.value = _state.value.copy(feedback = message, correct = correct)
         viewModelScope.launch {
@@ -266,18 +266,43 @@ class LearningViewModel @Inject constructor(
         }
     }
 
-    /** Some answers have several ways of being said; "de izquierda a derecha" also needs the right order. */
+    /** How the answer is said aloud: the code stores "centro", the recordings say "ambos lados". */
+    private fun spokenAnswer(answer: String): String = if (VoiceText.normalize(answer) == "centro") "ambos lados" else answer
+
+    /**
+     * Every answer accepts the several ways people say it, and small recognizer slips. "Centro" and "ambos
+     * lados" are the same answer. Movement ("de izquierda a derecha") is judged by the order of the two sides,
+     * or by where the sound went ("hacia la derecha").
+     */
     private fun matches(spoken: String, expected: String): Boolean {
         val text = VoiceText.normalize(spoken)
         val want = VoiceText.normalize(expected)
-        val left = text.indexOf("izquierda")
-        val right = text.indexOf("derecha")
+        fun said(vararg words: String) = VoiceText.hasAny(text, *words)
+        val left = text.indexOf("izquierd")
+        val right = text.indexOf("derech")
         return when (want) {
-            "de izquierda a derecha" -> left >= 0 && right >= 0 && left < right
-            "de derecha a izquierda" -> left >= 0 && right >= 0 && right < left
-            "centro" -> listOf("centro", "ambos", "los dos", "medio").any { it in text }
-            "enfrente" -> listOf("enfrente", "frente", "adelante").any { it in text }
-            "atras" -> listOf("atras", "detras", "espalda").any { it in text }
+            "de izquierda a derecha" -> when {
+                left >= 0 && right >= 0 -> left < right
+                else -> said("hacia la derecha", "a la derecha", "hacia el lado derecho", "se fue a la derecha", "va a la derecha")
+            }
+            "de derecha a izquierda" -> when {
+                left >= 0 && right >= 0 -> right < left
+                else -> said("hacia la izquierda", "a la izquierda", "hacia el lado izquierdo", "se fue a la izquierda", "va a la izquierda")
+            }
+            "izquierda" -> said("izquierda", "izquierdo", "lado izquierdo", "oido izquierdo") && !said("derecha", "derecho")
+            "derecha" -> said("derecha", "derecho", "lado derecho", "oido derecho") && !said("izquierda", "izquierdo")
+            "centro" -> said(
+                "centro", "ambos", "los dos", "medio", "en medio", "al centro", "de los dos lados", "por los dos lados",
+                "los dos lados", "ambos lados", "ambos oidos", "los dos oidos", "de ambos lados", "parejo",
+            )
+            "cerca" -> said("cerca", "cercano", "cerquita", "pegado", "muy cerca", "fuerte", "de cerca")
+            "lejos" -> said("lejos", "lejano", "distante", "alejado", "a lo lejos", "muy lejos", "bajito", "de lejos", "debil")
+            "enfrente" -> said("enfrente", "frente", "adelante", "al frente", "de frente", "delante", "por delante")
+            "atras" -> said("atras", "detras", "espalda", "de atras", "por atras", "por detras", "a mi espalda", "atrasito")
+            "corto" -> said("corto", "cortos", "cortito", "breve", "breves", "rapido", "rapidos") && !said("largo", "largos")
+            "largo" -> said("largo", "largos", "prolongado", "extenso", "lento", "sostenido") && !said("corto", "cortos", "breve")
+            "mixto" -> said("mixto", "mezcla", "mezclado", "combinado", "alternado", "variado", "corto y largo", "largo y corto") ||
+                (said("corto", "cortos", "breve") && said("largo", "largos"))
             else -> want in text
         }
     }
@@ -290,6 +315,6 @@ class LearningViewModel @Inject constructor(
     }
 
     private companion object {
-        val LEVEL_COMMAND = Regex("nivel (uno|dos|tres|1|2|3)")
+        val LEVEL_COMMAND = Regex("(?:nivel (uno|dos|tres|1|2|3)|(primer|segundo|tercer) nivel)")
     }
 }

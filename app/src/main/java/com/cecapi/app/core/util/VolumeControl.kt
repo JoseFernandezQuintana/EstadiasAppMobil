@@ -38,20 +38,20 @@ class VolumeControl @Inject constructor(
     fun handle(spoken: String): String? {
         val text = VoiceText.normalize(spoken)
         return when {
-            listOf("volumen al maximo", "volumen maximo", "maximo volumen").any { it in text } ->
+            listOf("volumen al maximo", "volumen maximo", "maximo volumen").let { phrases -> VoiceText.hasAny(text, phrases) } ->
                 change(maxIndex, atLimit = "El volumen ya está al máximo.")
-            listOf("volumen al minimo", "volumen minimo", "minimo volumen").any { it in text } ->
+            listOf("volumen al minimo", "volumen minimo", "minimo volumen").let { phrases -> VoiceText.hasAny(text, phrases) } ->
                 change(1, atLimit = "El volumen ya está al mínimo.")
             listOf("sube el volumen", "subir el volumen", "sube volumen", "subir volumen", "aumenta el volumen",
                 "aumentar el volumen", "mas volumen", "mas fuerte", "volumen arriba", "alza el volumen")
-                .any { it in text } ->
+                .let { phrases -> VoiceText.hasAny(text, phrases) } ->
                 change((currentIndex + step).coerceAtMost(maxIndex), atLimit = "El volumen ya está al máximo.")
             listOf("baja el volumen", "bajar el volumen", "baja volumen", "bajar volumen", "disminuye el volumen",
                 "menos volumen", "mas bajo", "volumen abajo")
-                .any { it in text } ->
+                .let { phrases -> VoiceText.hasAny(text, phrases) } ->
                 change((currentIndex - step).coerceAtLeast(1), atLimit = "El volumen ya está al mínimo.")
             listOf("cuanto volumen", "que volumen", "nivel de volumen", "como esta el volumen", "volumen actual")
-                .any { it in text } -> levelText()
+                .let { phrases -> VoiceText.hasAny(text, phrases) } -> levelText()
             else -> null
         }
     }

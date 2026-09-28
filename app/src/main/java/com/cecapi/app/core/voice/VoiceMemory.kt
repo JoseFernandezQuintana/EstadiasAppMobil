@@ -32,8 +32,8 @@ class VoiceMemory @Inject constructor() {
         val text = VoiceText.normalize(spoken)
         val wantsRepeat = listOf(
             "repite", "repetir", "otra vez", "de nuevo", "lo mismo", "solicitud anterior", "comando anterior",
-        ).any { it in text }
-        val aboutAnswer = listOf("dijiste", "respuesta", "no escuche", "que dices").any { it in text }
+        ).let { phrases -> VoiceText.hasAny(text, phrases) }
+        val aboutAnswer = listOf("dijiste", "respuesta", "no escuche", "que dices").let { phrases -> VoiceText.hasAny(text, phrases) }
         return when {
             aboutAnswer && (wantsRepeat || "dijiste" in text || "que dices" in text) -> Repeat.RESPONSE
             wantsRepeat -> Repeat.REQUEST

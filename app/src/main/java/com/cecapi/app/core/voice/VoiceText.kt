@@ -31,4 +31,50 @@ object VoiceText {
 
     /** [fold] with repeated spaces collapsed: "¡Ingresa, el usuario!" -> "ingresa el usuario". */
     fun normalize(text: String): String = fold(text).trim().replace(Regex("\\s+"), " ")
+
+    /**
+     * True when the normalized [text] contains any of the normalized [phrases], forgiving what a speech
+     * recognizer usually gets wrong: a letter off ("isquierda"), a word split in two ("en frente") or two
+     * words run together. Short words (under 5 letters) must match exactly so "no" never matches "nos".
+     */
+    fun hasAny(text: String, vararg phrases: String): Boolean = phrases.any { matches(text, it) }
+
+    fun hasAny(text: String, phrases: Collection<String>): Boolean = phrases.any { matches(text, it) }
+
+    fun matches(text: String, phrase: String): Boolean {
+        if (phrase in text) return true
+        val target = phrase.trim()
+        if (target.isEmpty()) return false
+        val targetWords = target.split(" ").filter { it.isNotEmpty() }
+        val textWords = text.split(" ").filter { it.isNotEmpty() }
+        // One long word said as two ("en frente" for "enfrente").
+        if (targetWords.size == 1 && target.length >= 6 && target in text.replace(" ", "")) return true
+        if (targetWords.size > textWords.size) return false
+        for (start in 0..textWords.size - targetWords.size) {
+            if (targetWords.indices.all { i -> closeEnough(textWords[start + i], targetWords[i]) }) return true
+        }
+        return false
+    }
+
+    private fun closeEnough(word: String, target: String): Boolean {
+        if (word == target) return true
+        if (target.length < 5) return false
+        val allowed = if (target.length >= 8) 2 else 1
+        return kotlin.math.abs(word.length - target.length) <= allowed && distance(word, target) <= allowed
+    }
+
+    /** Edit distance: how many letters must change, be added or removed to turn [a] into [b]. */
+    private fun distance(a: String, b: String): Int {
+        var previous = IntArray(b.length + 1) { it }
+        for (i in 1..a.length) {
+            val current = IntArray(b.length + 1)
+            current[0] = i
+            for (j in 1..b.length) {
+                val cost = if (a[i - 1] == b[j - 1]) 0 else 1
+                current[j] = minOf(current[j - 1] + 1, previous[j] + 1, previous[j - 1] + cost)
+            }
+            previous = current
+        }
+        return previous[b.length]
+    }
 }

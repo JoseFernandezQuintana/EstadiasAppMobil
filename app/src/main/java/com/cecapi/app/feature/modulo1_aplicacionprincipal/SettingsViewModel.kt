@@ -81,10 +81,10 @@ class SettingsViewModel @Inject constructor(
      */
     private fun onSpeech(spoken: String) {
         val text = VoiceText.normalize(spoken)
-        fun has(vararg words: String) = words.any { it in text }
+        fun has(vararg words: String) = VoiceText.hasAny(text, *words)
         val enable = when {
-            listOf("desactiv", "apaga", "quita", "sin ", "no quiero").any { it in text } -> false
-            listOf("activ", "enciende", "prende", "pon ", "quiero").any { it in text } -> true
+            listOf("desactiv", "apaga", "quita", "sin ", "no quiero").let { phrases -> VoiceText.hasAny(text, phrases) } -> false
+            listOf("activ", "enciende", "prende", "pon ", "quiero").let { phrases -> VoiceText.hasAny(text, phrases) } -> true
             else -> null
         }
         // "si" and "no" must be whole words: "siguiente" contains "si".
@@ -93,8 +93,8 @@ class SettingsViewModel @Inject constructor(
         val cleaning = _pendingClean.value
         when {
             CommandCatalog.isRequest(spoken) -> voiceEngine.speak(CommandCatalog.SETTINGS, listenAfter = true)
-            cleaning && hasWord("si", "confirmo", "borralas", "adelante") -> confirmClean()
-            cleaning && hasWord("no", "cancela", "cancelar") -> cancelClean()
+            cleaning && hasWord("si", "claro", "dale", "ok", "okey", "supuesto", "afirmativo", "correcto", "seguro", "hazlo", "confirmo", "borralas", "adelante") -> confirmClean()
+            cleaning && hasWord("no", "nunca", "negativo", "olvidalo", "dejalo", "cancela", "cancelar") -> cancelClean()
             has("cuanto espacio", "espacio libre", "almacenamiento", "cuanto ocupa") -> speakStorage()
             has("libera espacio", "liberar espacio", "libera memoria", "limpia el espacio", "limpiar espacio", "borra las fotos", "borrar las fotos") ->
                 askClean()
@@ -104,7 +104,7 @@ class SettingsViewModel @Inject constructor(
                 _listenOutsideRequests.tryEmit(enable)
             has("modo simple") && enable != null -> onSimpleModeChanged(enable)
             has("aviso") && enable != null -> onAnnounceNotificationsChanged(enable)
-            has("atras", "volver", "salir", "menu", "regresa") -> _back.tryEmit(Unit)
+            has("atras", "volver", "vuelve", "regresa", "regresar", "salir", "menu", "inicio", "pantalla anterior") -> _back.tryEmit(Unit)
             else -> {
                 cues.play(FeedbackCues.Cue.NOT_UNDERSTOOD)
                 voiceEngine.speak("No entendí. " + CommandCatalog.hint("configuración"), listenAfter = true)

@@ -10,7 +10,7 @@ object CommandCatalog {
         "que puedo hacer", "que puedes hacer", "que sabes hacer",
     )
 
-    fun isRequest(spoken: String): Boolean = VoiceText.normalize(spoken).let { text -> requestPhrases.any { it in text } }
+    fun isRequest(spoken: String): Boolean = VoiceText.normalize(spoken).let { text -> requestPhrases.let { phrases -> VoiceText.hasAny(text, phrases) } }
 
     /**
      * Said right after a screen introduces itself, so the person knows every screen has its own list.

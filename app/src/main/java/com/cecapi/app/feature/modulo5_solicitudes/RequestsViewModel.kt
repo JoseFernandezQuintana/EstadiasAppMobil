@@ -77,7 +77,7 @@ class RequestsViewModel @Inject constructor(
     private fun onSpeech(spoken: String) {
         val state = _uiState.value
         val text = VoiceText.normalize(spoken)
-        fun has(vararg words: String) = words.any { it in text }
+        fun has(vararg words: String) = VoiceText.hasAny(text, *words)
         val answering = state.plantillaSeleccionada != null && state.textoGenerado == null
         when {
             CommandCatalog.isRequest(spoken) -> voiceEngine.speak(CommandCatalog.DOCUMENTS, listenAfter = true)
@@ -88,10 +88,10 @@ class RequestsViewModel @Inject constructor(
             answering -> onAnswerProvided(spoken)
             state.textoGenerado != null && has("repite", "otra vez", "lee", "leer") ->
                 voiceEngine.speak(state.textoGenerado)
-            has("atras", "volver", "salir", "menu", "regresa") -> _back.tryEmit(Unit)
+            has("atras", "volver", "vuelve", "regresa", "regresar", "salir", "menu", "inicio", "pantalla anterior") -> _back.tryEmit(Unit)
             else -> {
                 val elegida = plantillas.value.firstOrNull { plantilla ->
-                    VoiceText.normalize(plantilla.titulo).split(" ").filter { it.length > 3 }.any { it in text }
+                    VoiceText.normalize(plantilla.titulo).split(" ").filter { it.length > 3 }.let { phrases -> VoiceText.hasAny(text, phrases) }
                 }
                 if (elegida != null) {
                     onPlantillaSelected(elegida)

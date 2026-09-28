@@ -63,7 +63,7 @@ class PersonalizationViewModel @Inject constructor(
     /** The commands this screen answers; each one does what the matching control on screen does. */
     private fun onSpeech(spoken: String) {
         val text = VoiceText.normalize(spoken)
-        fun has(vararg words: String) = words.any { it in text }
+        fun has(vararg words: String) = VoiceText.hasAny(text, *words)
         val newAssistantName = ASSISTANT_NAME.find(spoken)?.groupValues?.get(1)
         val newUserName = USER_NAME.find(spoken)?.groupValues?.get(1)
         when {
@@ -84,7 +84,7 @@ class PersonalizationViewModel @Inject constructor(
             has("vibracion") && has("normal") -> onVibrationLevelChanged(2)
             has("vibracion") && onOff(text) != null -> onVibrationCuesChanged(onOff(text) == true)
             has("sonido") && onOff(text) != null -> onSoundCuesChanged(onOff(text) == true)
-            has("atras", "volver", "salir", "menu", "regresa") -> _back.tryEmit(Unit)
+            has("atras", "volver", "vuelve", "regresa", "regresar", "salir", "menu", "inicio", "pantalla anterior") -> _back.tryEmit(Unit)
             else -> {
                 cues.play(FeedbackCues.Cue.NOT_UNDERSTOOD)
                 voiceEngine.speak("No entendí. " + CommandCatalog.hint("personalización"), listenAfter = true)
@@ -94,8 +94,8 @@ class PersonalizationViewModel @Inject constructor(
 
     /** "Desactiva" contains "activa", so the negative words are checked first. */
     private fun onOff(text: String): Boolean? = when {
-        listOf("desactiv", "apaga", "quita", "sin ", "no quiero").any { it in text } -> false
-        listOf("activ", "enciende", "prende", "pon ", "quiero").any { it in text } -> true
+        listOf("desactiv", "apaga", "quita", "sin ", "no quiero").let { phrases -> VoiceText.hasAny(text, phrases) } -> false
+        listOf("activ", "enciende", "prende", "pon ", "quiero").let { phrases -> VoiceText.hasAny(text, phrases) } -> true
         else -> null
     }
 

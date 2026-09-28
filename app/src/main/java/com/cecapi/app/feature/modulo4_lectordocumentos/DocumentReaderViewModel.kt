@@ -80,12 +80,12 @@ class DocumentReaderViewModel @Inject constructor(
     /** The commands the reader answers, most specific first. */
     private fun onSpeech(spoken: String) {
         val text = VoiceText.normalize(spoken)
-        fun has(vararg words: String) = words.any { it in text }
+        fun has(vararg words: String) = VoiceText.hasAny(text, *words)
         val hayDocumento = _uiState.value.parrafos.isNotEmpty()
         when {
             CommandCatalog.isRequest(spoken) -> voiceEngine.speak(CommandCatalog.READER, listenAfter = true)
             has("parrafo anterior", "anterior") -> anteriorParrafo()
-            has("atras", "volver", "salir", "menu", "regresa") -> {
+            has("atras", "volver", "vuelve", "regresa", "regresar", "salir", "menu", "inicio", "pantalla anterior") -> {
                 detenerLectura()
                 _back.tryEmit(Unit)
             }

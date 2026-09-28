@@ -29,13 +29,13 @@ class PhoneStatusReader @Inject constructor(
         val text = VoiceText.normalize(spoken)
         return when {
             listOf("estado del telefono", "estado del celular", "estado de la pantalla", "estado del dispositivo",
-                "como esta mi telefono", "como esta mi celular").any { it in text } -> fullReport()
-            listOf("bateria", "pila", "cuanta carga").any { it in text } -> battery()
-            listOf("wifi", "wi fi", "internet", "senal", "cobertura", "datos moviles", "conexion").any { it in text } -> network()
+                "como esta mi telefono", "como esta mi celular").let { phrases -> VoiceText.hasAny(text, phrases) } -> fullReport()
+            listOf("bateria", "pila", "cuanta carga").let { phrases -> VoiceText.hasAny(text, phrases) } -> battery()
+            listOf("wifi", "wi fi", "internet", "senal", "cobertura", "datos moviles", "conexion").let { phrases -> VoiceText.hasAny(text, phrases) } -> network()
             Regex("\\bhora\\b").containsMatchIn(text) -> time()
             Regex("\\bano\\b").containsMatchIn(text) -> year()
             Regex("\\bmes\\b").containsMatchIn(text) -> month()
-            listOf("que dia", "dia es", "dia de hoy").any { it in text } -> today()
+            listOf("que dia", "dia es", "dia de hoy").let { phrases -> VoiceText.hasAny(text, phrases) } -> today()
             "fecha" in text -> date()
             else -> null
         }

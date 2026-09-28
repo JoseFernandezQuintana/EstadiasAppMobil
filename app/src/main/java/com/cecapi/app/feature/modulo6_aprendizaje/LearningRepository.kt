@@ -9,7 +9,7 @@ import javax.inject.Singleton
 // Instrucción genérica por nivel, para que Alonso solo grabe 3 frases en vez
 // de una por cada ejercicio (los 34 ejercicios de un mismo nivel comparten la
 // misma instrucción).
-private const val INSTRUCCION_NIVEL_1 = "Escucha con atención. ¿De qué lado viene el sonido: izquierda, derecha o centro?"
+private const val INSTRUCCION_NIVEL_1 = "Escucha con atención. ¿De qué lado viene el sonido: izquierda, derecha o ambos lados?"
 private const val INSTRUCCION_NIVEL_2 = "Escucha con atención. ¿El sonido se movió, o qué tan cerca o lejos lo sentiste?"
 private const val INSTRUCCION_NIVEL_3 = "Escucha con atención. Cuando el sonido se detenga, dime de qué lado viene."
 

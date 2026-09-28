@@ -32,7 +32,7 @@ class IntentFallback @Inject constructor() {
     fun deepQuestionFor(spoken: String): String? {
         if (resolver == null) return null
         val text = VoiceText.normalize(spoken)
-        val wantsMore = DEEP_PHRASES.any { it in text }
+        val wantsMore = DEEP_PHRASES.let { phrases -> VoiceText.hasAny(text, phrases) }
         return if (wantsMore) lastQuestion else null
     }
 

@@ -67,10 +67,10 @@ class EnvironmentViewModel @Inject constructor(
     /** The commands this screen answers, most specific first. */
     private fun onSpeech(spoken: String) {
         val text = VoiceText.normalize(spoken)
-        fun has(vararg words: String) = words.any { it in text }
+        fun has(vararg words: String) = VoiceText.hasAny(text, *words)
         when {
             CommandCatalog.isRequest(spoken) -> voiceEngine.speak(CommandCatalog.ENVIRONMENT, listenAfter = true)
-            has("atras", "volver", "salir", "menu", "regresa") -> _back.tryEmit(Unit)
+            has("atras", "volver", "vuelve", "regresa", "regresar", "salir", "menu", "inicio", "pantalla anterior") -> _back.tryEmit(Unit)
             has("leer texto", "lee", "leer", "texto", "documento") -> {
                 cues.play(FeedbackCues.Cue.NAVIGATE)
                 voiceEngine.speak("Cambiando al lector de texto.")
