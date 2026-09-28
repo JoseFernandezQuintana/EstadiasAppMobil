@@ -9,6 +9,7 @@ import com.cecapi.app.core.voice.DeviceSettings
 import com.cecapi.app.core.voice.FeedbackCues
 import com.cecapi.app.core.voice.VoiceEngine
 import com.cecapi.app.core.voice.VoiceOption
+import com.cecapi.app.core.voice.VoiceProfile
 import com.cecapi.app.core.voice.VoiceText
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -208,6 +209,14 @@ class PersonalizationViewModel @Inject constructor(
                 else -> "Vibración normal."
             },
         )
+    }
+
+    /** A ready-made way of talking for a child, an adult or an older person: speed, pitch and tú or usted. */
+    fun onProfileChosen(profile: VoiceProfile) {
+        viewModelScope.launch { deviceSettings.applyProfile(profile) }
+        voiceEngine.applyVoiceSettings(profile.rate, 1.0f) // so the announcement already sounds the new way
+        voiceEngine.addressStyle = profile.address
+        voiceEngine.speak(profile.announcement)
     }
 
     fun onBlackScreenChanged(enabled: Boolean) = displayControl.setBlackScreen(enabled)

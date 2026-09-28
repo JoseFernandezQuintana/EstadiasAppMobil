@@ -41,6 +41,7 @@ import com.cecapi.app.core.ui.voiceHint
 import com.cecapi.app.core.voice.AddressStyle
 import com.cecapi.app.core.voice.FeedbackCues
 import com.cecapi.app.core.voice.VoiceOption
+import com.cecapi.app.core.voice.VoiceProfile
 import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
 
@@ -203,6 +204,21 @@ fun PersonalizationScreen(
             ActionButton("Guardar mi nombre", "Guardar mi nombre. Guarda el nombre que escribiste.") {
                 viewModel.onAssistantNameSaved(assistant)
             }
+        }
+
+        Section("PERFIL", "Ajustes listos según quién usa la aplicación, de cualquier edad") {
+            ActionButton(
+                "Niño",
+                "Perfil de niño. Hablo un poco más despacio, con una voz más amable, y te hablo de tú. También puedes decir: perfil de niño.",
+            ) { viewModel.onProfileChosen(VoiceProfile.CHILD) }
+            ActionButton(
+                "Normal",
+                "Perfil normal. Hablo a velocidad normal y te hablo de tú. También puedes decir: perfil normal.",
+            ) { viewModel.onProfileChosen(VoiceProfile.NORMAL) }
+            ActionButton(
+                "Persona mayor",
+                "Perfil de persona mayor. Hablo más despacio y le hablo de usted. También puedes decir: perfil de persona mayor.",
+            ) { viewModel.onProfileChosen(VoiceProfile.SENIOR) }
         }
 
         Section("PANTALLA", "Para quien no usa la imagen: todo en negro y con el menor brillo") {

@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -31,6 +32,8 @@ import com.cecapi.app.core.util.VolumeControl
 import com.cecapi.app.core.voice.DeviceSettings
 import com.cecapi.app.core.voice.GlobalVoiceCommands
 import com.cecapi.app.core.voice.LaunchRequests
+import com.cecapi.app.core.voice.ScreenContext
+import com.cecapi.app.feature.modulo1_aplicacionprincipal.AssistCommands
 import com.cecapi.app.core.voice.VoiceEngine
 import com.cecapi.app.core.voice.WakeWordController
 import androidx.lifecycle.lifecycleScope
@@ -47,6 +50,10 @@ class MainActivity : ComponentActivity() {
     @Inject lateinit var volumeControl: VolumeControl
     @Inject lateinit var displayControl: DisplayControl
     @Inject lateinit var storageReport: StorageReport
+    @Inject lateinit var screenContext: ScreenContext
+
+    // Injecting it registers the commands that teach the app and adjust the voice by profile.
+    @Inject lateinit var assistCommands: AssistCommands
 
     // Injecting it is what makes the saved voice speed and cue settings apply at startup.
     @Inject lateinit var deviceSettings: DeviceSettings
@@ -129,6 +136,7 @@ class MainActivity : ComponentActivity() {
                     val navController = rememberNavController()
                     val blackScreen by deviceSettings.blackScreen.collectAsState(initial = false)
                     val route = navController.currentBackStackEntryAsState().value?.destination?.route
+                    LaunchedEffect(route) { screenContext.route = route }
                     // The camera screens keep their picture: it is what they are for.
                     val showBlack = blackScreen &&
                         route != CecapiDestinations.DOCUMENT_READER && route != CecapiDestinations.ENVIRONMENT

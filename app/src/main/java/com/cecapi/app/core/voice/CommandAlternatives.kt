@@ -13,6 +13,8 @@ object CommandAlternatives {
         "En cualquier pantalla puedes decir: estado del teléfono, batería, wifi, hora, fecha, año o mes. " +
             "Sube el volumen o baja el volumen. Qué notificaciones tengo. " +
             "Pantalla negra, para ver todo en negro, y pantalla normal, para volver. Brillo mínimo, y brillo normal. " +
+            "Dónde estoy, para saber en qué pantalla estás. Tutorial, o cómo funciona la cámara, para aprender a usar la aplicación. " +
+            "Habla más despacio, o habla más rápido. Perfil de niño, perfil normal o perfil de persona mayor. Cómo voy, para saber tu nivel. " +
             "Dime más, para profundizar en lo último que respondí. Repite la solicitud anterior. " +
             "Silencio, para que me calle un momento. Para, para detenerme del todo. " +
             "Di otras formas de decirlo, para conocer más maneras de decir cada cosa."
@@ -129,6 +131,17 @@ object CommandAlternatives {
                 "chats, conversaciones o historial; personalización o personalizar; configuración o ajustes. " +
                 "Atajos: qué hay enfrente, describe o entorno abre la descripción; leer texto, lee esto o lee el texto abre el lector. " +
                 "Ponerme nombre: llámate, te llamas o tu nombre es, y el nombre.",
+        ),
+        Area(
+            key = "help",
+            spokenName = "ayuda y aprendizaje",
+            keywords = listOf("ayuda", "tutorial", "aprender", "perfil", "perfiles", "progreso", "donde estoy", "ensename"),
+            text = "Ayuda y aprendizaje. Aprender a usar la aplicación: tutorial, cómo se usa, cómo funciona la aplicación o enséñame a usar la aplicación. " +
+                "Una parte en concreto: tutorial de la cámara, de actividades, de documentos, de chats, de personalización, de configuración o de la pantalla negra. " +
+                "Saber dónde estás: dónde estoy, en qué pantalla estoy o qué pantalla es esta. " +
+                "Tu avance: cómo voy, mi nivel, mi progreso o en qué nivel voy. " +
+                "Hablar más despacio: habla más despacio, habla más lento o más despacio por favor; y más rápido: habla más rápido o hablas muy despacio. " +
+                "Perfiles: perfil de niño, perfil normal y perfil de persona mayor; también modo niños, modo normal y modo persona mayor.",
         ),
         Area(
             key = "general",

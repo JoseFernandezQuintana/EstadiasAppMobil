@@ -119,6 +119,13 @@ class DeviceSettings @Inject constructor(
 
     suspend fun setAiEnabled(enabled: Boolean) = context.deviceSettingsStore.edit { it[KEY_AI] = enabled }
 
+    /** Applies a ready-made [VoiceProfile]: speed, pitch and how the assistant addresses the person. */
+    suspend fun applyProfile(profile: VoiceProfile) {
+        setSpeechRate(profile.rate)
+        setPitch(profile.pitch)
+        setAddressStyle(profile.address)
+    }
+
     private companion object {
         const val DEFAULT_RATE = 1.0f
         val KEY_RATE = floatPreferencesKey("speech_rate")
