@@ -65,14 +65,20 @@ class RequestsViewModel @Inject constructor(
             "Documentos. Elige una plantilla para comenzar. " + CommandCatalog.hint("documentos"),
             listenAfter = true,
         )
+        // What is said while a template is being filled in is the answer, so the global commands (time, internet,
+        // volume...) must not take it: "la fecha de hoy" is a date to write down, not a question about the phone.
+        viewModelScope.launch {
+            _uiState.collect { s -> voiceEngine.rawInput = s.plantillaSeleccionada != null && s.textoGenerado == null }
+        }
         viewModelScope.launch {
             voiceEngine.recognizedSpeech.collect { speech -> onSpeech(speech.text) }
         }
     }
 
     /**
-     * While a template is being filled in, whatever is said is the answer to the current question,
-     * except for the few control phrases below. Otherwise the person is choosing a template.
+     * While a template is being filled in, whatever is said is the answer to the current question, except a few
+     * control phrases that count only when they are the whole phrase (an answer may contain "cancelar" or
+     * "otra vez"). Otherwise the person is choosing a template.
      */
     private fun onSpeech(spoken: String) {
         val state = _uiState.value
@@ -80,12 +86,12 @@ class RequestsViewModel @Inject constructor(
         fun has(vararg words: String) = VoiceText.hasAny(text, *words)
         val answering = state.plantillaSeleccionada != null && state.textoGenerado == null
         when {
-            CommandCatalog.isRequest(spoken) -> voiceEngine.speak(CommandCatalog.DOCUMENTS, listenAfter = true)
-            has("cancelar", "cancela", "reiniciar", "otra plantilla", "nueva plantilla") && state.plantillaSeleccionada != null ->
-                onReiniciar()
-            answering && has("repite la pregunta", "repite", "otra vez") ->
-                voiceEngine.speak(state.preguntaActual ?: "", listenAfter = true)
+            CommandCatalog.isRequest(spoken) && (!answering || text.split(" ").size <= 4) ->
+                voiceEngine.speak(CommandCatalog.DOCUMENTS, listenAfter = true)
+            answering && text in CANCEL_PHRASES -> onReiniciar()
+            answering && text in REPEAT_PHRASES -> voiceEngine.speak(state.preguntaActual ?: "", listenAfter = true)
             answering -> onAnswerProvided(spoken)
+            state.plantillaSeleccionada != null && has(*CANCEL_PHRASES.toTypedArray()) -> onReiniciar()
             state.textoGenerado != null && has("repite", "otra vez", "lee", "leer") ->
                 voiceEngine.speak(state.textoGenerado)
             has("atras", "volver", "vuelve", "regresa", "regresar", "salir", "menu", "inicio", "pantalla anterior") -> _back.tryEmit(Unit)
@@ -118,7 +124,7 @@ class RequestsViewModel @Inject constructor(
         if (placeholders.isEmpty()) {
             finalizarSolicitud(plantilla, emptyMap())
         } else {
-            voiceEngine.speak("${plantilla.titulo}. ${_uiState.value.preguntaActual}")
+            voiceEngine.speak("${plantilla.titulo}. ${_uiState.value.preguntaActual}", listenAfter = true)
         }
     }
 
@@ -134,7 +140,7 @@ class RequestsViewModel @Inject constructor(
             finalizarSolicitud(plantilla, nuevasRespuestas)
         } else {
             _uiState.value = state.copy(respuestas = nuevasRespuestas, indiceActual = siguienteIndice)
-            voiceEngine.speak(_uiState.value.preguntaActual ?: "")
+            voiceEngine.speak(_uiState.value.preguntaActual ?: "", listenAfter = true)
         }
     }
 
@@ -153,6 +159,16 @@ class RequestsViewModel @Inject constructor(
 
     fun onReiniciar() {
         _uiState.value = RequestsUiState()
-        voiceEngine.speak("Elige otra plantilla para comenzar.")
+        voiceEngine.speak("Elige otra plantilla para comenzar.", listenAfter = true)
+    }
+
+    override fun onCleared() {
+        voiceEngine.rawInput = false
+        super.onCleared()
+    }
+
+    private companion object {
+        val CANCEL_PHRASES = setOf("cancelar", "cancela", "reiniciar", "otra plantilla", "nueva plantilla")
+        val REPEAT_PHRASES = setOf("repite", "repetir", "repite la pregunta", "otra vez", "de nuevo")
     }
 }

@@ -83,8 +83,8 @@ class SettingsViewModel @Inject constructor(
         val text = VoiceText.normalize(spoken)
         fun has(vararg words: String) = VoiceText.hasAny(text, *words)
         val enable = when {
-            listOf("desactiv", "apaga", "quita", "sin ", "no quiero").let { phrases -> VoiceText.hasAny(text, phrases) } -> false
-            listOf("activ", "enciende", "prende", "pon ", "quiero").let { phrases -> VoiceText.hasAny(text, phrases) } -> true
+            listOf("desactiv*", "apaga", "quita", "sin", "no quiero").let { phrases -> VoiceText.hasAny(text, phrases) } -> false
+            listOf("activ*", "enciende", "prende", "pon", "quiero").let { phrases -> VoiceText.hasAny(text, phrases) } -> true
             else -> null
         }
         // "si" and "no" must be whole words: "siguiente" contains "si".

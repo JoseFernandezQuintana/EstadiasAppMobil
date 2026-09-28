@@ -39,7 +39,7 @@ object CommandAlternatives {
                 "Tomar la foto: toma la foto, foto, captura, escanea o fotografía. " +
                 "Repetir: repite, otra vez, de nuevo, desde el principio o empieza. " +
                 "Siguiente párrafo: siguiente o adelante. Párrafo anterior: anterior. " +
-                "Detener la lectura: pausar, o silencio. Seguir: continúa, sigue o reanuda. " +
+                "Detener la lectura: pausa o pausar. Seguir: continúa, sigue o reanuda. " +
                 "Otro papel: otra foto, nueva foto, otro documento o nuevo documento. " +
                 "Usar una foto que ya tienes: elige una foto, galería, mis fotos, de mi teléfono o imagen guardada; la app solo ve la que elijas. " +
                 "Volver: atrás, volver, vuelve, regresa, regresar, salir, menú o pantalla anterior.",
@@ -89,7 +89,7 @@ object CommandAlternatives {
                 "Mi nombre: llámate Luna, te llamas Luna o tu nombre es Luna. " +
                 "Cambiar la voz: otra voz, siguiente voz, cambia la voz o cambia de voz; y voz anterior para la de antes. " +
                 "Velocidad: más rápido, más veloz o acelera; más lento o más despacio. " +
-                "Tono: más grave, voz grave o más bajo; más agudo, voz aguda o más alto. " +
+                "Tono: más grave o voz grave; más agudo o voz aguda. " +
                 "Sonidos y vibración: activa o desactiva los sonidos, y activa o desactiva la vibración. " +
                 "Fuerza de la vibración: vibración suave, normal o fuerte. " +
                 "Probar: prueba de voz, probar voz, prueba la voz o di algo.",

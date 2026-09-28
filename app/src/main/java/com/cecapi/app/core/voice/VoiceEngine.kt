@@ -270,6 +270,9 @@ class VoiceEngine @Inject constructor(
     /** True while a screen wants the next phrase exactly as spoken, without global commands in between. */
     @Volatile var rawInput = false
 
+    /** When the person last spoke over the assistant. Screens that read on their own (the text reader) must not go on to the next part. */
+    @Volatile var lastBargeInAt = 0L
+
     /** False while the app is not on screen (it may still be listening through the background service). */
     @Volatile var appVisible = true
 
@@ -429,6 +432,7 @@ class VoiceEngine @Inject constructor(
     /** The user talked over the assistant: shut it up and listen to what they are saying. */
     private fun onBargeIn(@Suppress("UNUSED_PARAMETER") token: AtomicBoolean) {
         Log.d(TAG, "Barge-in: user spoke over the assistant")
+        lastBargeInAt = System.currentTimeMillis()
         silenceSpeech()
         startListening()
     }
@@ -659,7 +663,7 @@ class VoiceEngine @Inject constructor(
         val SENTENCE_END = Regex("(?<=[.!?…])\\s+")
 
         // Whole phrases only ("para" also appears inside everyday sentences).
-        val SILENCE_PHRASES = setOf("silencio", "espera", "esperame", "callate", "un momento", "un segundo", "pausa")
+        val SILENCE_PHRASES = setOf("silencio", "espera", "esperame", "callate", "un momento", "un segundo")
         val STOP_PHRASES = setOf("para", "detente", "alto", "basta", "para ya", "ya para", "hasta luego", "adios", "apagate")
 
         // Barge-in tuning. RMS is on 16-bit PCM (0..32767); normal speech close to the phone is

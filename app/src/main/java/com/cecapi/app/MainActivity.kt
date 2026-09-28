@@ -142,7 +142,10 @@ class MainActivity : ComponentActivity() {
                         }
                         if (showBlack) {
                             BlackScreen(
-                                onTap = { voiceEngine.speak(voiceEngine.wakePrompt(), listenAfter = true) },
+                                onTap = {
+                                    voiceEngine.activate() // "silencio" and "para" must not make the only touch target mute
+                                    voiceEngine.speak(voiceEngine.wakePrompt(), listenAfter = true)
+                                },
                                 onHold = { displayControl.setBlackScreen(false) },
                             )
                         }

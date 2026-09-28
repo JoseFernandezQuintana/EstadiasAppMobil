@@ -246,7 +246,7 @@ class DocumentReaderViewModel @Inject constructor(
         var i = indice
         while (i < lista.size && VoiceText.forSpeech(lista[i]).isBlank()) i++
         val parrafo = lista.getOrNull(i)
-        if (parrafo == null || voiceEngine.mode.value != AssistantMode.ACTIVE) {
+        if (parrafo == null || voiceEngine.mode.value != AssistantMode.ACTIVE || !voiceEngine.appVisible) {
             _uiState.value = _uiState.value.copy(estaLeyendo = false)
             return
         }
@@ -348,8 +348,9 @@ class DocumentReaderViewModel @Inject constructor(
                         // Otro módulo habló encima de la lectura: la damos por interrumpida.
                         _uiState.value = state.copy(estaLeyendo = false)
                     } else if (actual is VoiceState.Idle && anterior == VoiceState.Speaking(hablado)) {
-                        if (voiceEngine.mode.value != AssistantMode.ACTIVE) {
-                            // "Silencio" o "para" cortaron la voz: no seguir leyendo.
+                        val interrumpida = System.currentTimeMillis() - voiceEngine.lastBargeInAt < BARGE_IN_WINDOW_MS
+                        if (voiceEngine.mode.value != AssistantMode.ACTIVE || !voiceEngine.appVisible || interrumpida) {
+                            // "Silencio" o "para", salir de la app, o hablar encima de la lectura: no seguir leyendo.
                             _uiState.value = state.copy(estaLeyendo = false)
                         } else {
                             siguienteAutomatico(state)
@@ -373,5 +374,10 @@ class DocumentReaderViewModel @Inject constructor(
     override fun onCleared() {
         if (_uiState.value.estaLeyendo) voiceEngine.stopSpeaking()
         super.onCleared()
+    }
+
+    private companion object {
+        /** If the person spoke over the reading this recently, the pause in the voice was theirs: do not read on. */
+        const val BARGE_IN_WINDOW_MS = 1_500L
     }
 }

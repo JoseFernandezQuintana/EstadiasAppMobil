@@ -41,9 +41,9 @@ object VoiceText {
 
     private val YES_WORDS = setOf(
         "si", "claro", "dale", "ok", "okey", "supuesto", "afirmativo", "correcto", "seguro", "hazlo", "confirmo",
-        "confirmar", "adelante", "exacto", "listo",
+        "confirmar", "adelante", "exacto", "listo", "simon", "sale", "orale", "andale", "va", "sip", "aja",
     )
-    private val NO_WORDS = setOf("no", "nunca", "negativo", "olvidalo", "dejalo", "cancela", "cancelar", "nel")
+    private val NO_WORDS = setOf("no", "nunca", "negativo", "olvidalo", "dejalo", "cancela", "cancelar", "nel", "nop", "nope")
 
     /** A whole-word "no" (or a synonym) in [spoken]. It wins over a "si" in the same phrase: "no, sí, mejor no". */
     fun isNo(spoken: String): Boolean = normalize(spoken).split(" ").any { it in NO_WORDS }
@@ -55,22 +55,31 @@ object VoiceText {
     fun normalize(text: String): String = fold(text).trim().replace(SPACES, " ")
 
     /**
-     * True when the normalized [text] contains any of the normalized [phrases], forgiving what a speech
-     * recognizer usually gets wrong: a letter off ("isquierda"), a word split in two ("en frente") or two
-     * words run together. Short words (under 5 letters) must match exactly so "no" never matches "nos".
+     * True when the normalized [text] contains any of the normalized [phrases]. A phrase matches only as whole
+     * words ("menudo" is not "menu", "contexto" is not "texto"), and forgives what a recognizer gets wrong: a
+     * letter off in a long word ("isquierda") or a word split in two ("en frente"). A phrase ending in `*` is a
+     * stem that matches any word starting with it ("activ*" for "activa" and "activar"). Words that are real
+     * words in their own right ([REAL_WORDS]) are never "corrected" into a command.
      */
     fun hasAny(text: String, vararg phrases: String): Boolean = phrases.any { matches(text, it) }
 
     fun hasAny(text: String, phrases: Collection<String>): Boolean = phrases.any { matches(text, it) }
 
     fun matches(text: String, phrase: String): Boolean {
-        if (phrase in text) return true
         val target = phrase.trim()
         if (target.isEmpty()) return false
-        val targetWords = target.split(" ").filter { it.isNotEmpty() }
         val textWords = text.split(" ").filter { it.isNotEmpty() }
-        // One long word said as two ("en frente" for "enfrente").
-        if (targetWords.size == 1 && target.length >= 6 && target in text.replace(" ", "")) return true
+        if (target.endsWith("*")) {
+            val stem = target.removeSuffix("*")
+            return stem.isNotEmpty() && textWords.any { it.startsWith(stem) }
+        }
+        val targetWords = target.split(" ").filter { it.isNotEmpty() }
+        if (targetWords.size > textWords.size + 1) return false
+        if (" $text ".contains(" $target ")) return true
+        // One long word said as two neighbouring words ("en frente" for "enfrente"), never across the whole text.
+        if (targetWords.size == 1 && target.length >= 6) {
+            for (i in 0 until textWords.size - 1) if (textWords[i] + textWords[i + 1] == target) return true
+        }
         if (targetWords.size > textWords.size) return false
         for (start in 0..textWords.size - targetWords.size) {
             if (targetWords.indices.all { i -> closeEnough(textWords[start + i], targetWords[i]) }) return true
@@ -78,10 +87,17 @@ object VoiceText {
         return false
     }
 
+    /** Real words that are one letter away from a command. They only count when said exactly. */
+    private val REAL_WORDS = setOf(
+        "barra", "borro", "borre", "historia", "termino", "terminal", "describo", "vibro", "vaca", "pasa",
+        "chato", "coche", "olvido", "escribo", "escribir", "hacia", "estoy", "estas", "tengo",
+    )
+
     private fun closeEnough(word: String, target: String): Boolean {
         if (word == target) return true
-        if (target.length < 5) return false
-        val allowed = if (target.length >= 8) 2 else 1
+        if (target.length < 5 || word in REAL_WORDS) return false
+        if (word.first() != target.first()) return false
+        val allowed = if (target.length >= 9) 2 else 1
         return kotlin.math.abs(word.length - target.length) <= allowed && distance(word, target) <= allowed
     }
 

@@ -77,8 +77,8 @@ class PersonalizationViewModel @Inject constructor(
             has("prueba de voz", "probar voz", "prueba la voz", "escuchate", "di algo") -> onTestVoice()
             has("mas rapido", "mas veloz", "acelera", "habla mas rapido") -> onSpeechRateChanged((speechRate.value + 0.25f).coerceIn(0.5f, 2.0f))
             has("mas lento", "mas despacio", "despacio", "habla mas lento") -> onSpeechRateChanged((speechRate.value - 0.25f).coerceIn(0.5f, 2.0f))
-            has("mas grave", "voz grave", "mas bajo") -> onPitchChanged((pitch.value - 0.25f).coerceIn(0.5f, 2.0f))
-            has("mas agudo", "voz aguda", "mas alto") -> onPitchChanged((pitch.value + 0.25f).coerceIn(0.5f, 2.0f))
+            has("mas grave", "voz grave") -> onPitchChanged((pitch.value - 0.25f).coerceIn(0.5f, 2.0f))
+            has("mas agudo", "voz aguda") -> onPitchChanged((pitch.value + 0.25f).coerceIn(0.5f, 2.0f))
             has("vibracion") && has("suave") -> onVibrationLevelChanged(1)
             has("vibracion") && has("fuerte") -> onVibrationLevelChanged(3)
             has("vibracion") && has("normal") -> onVibrationLevelChanged(2)
@@ -94,8 +94,8 @@ class PersonalizationViewModel @Inject constructor(
 
     /** "Desactiva" contains "activa", so the negative words are checked first. */
     private fun onOff(text: String): Boolean? = when {
-        listOf("desactiv", "apaga", "quita", "sin ", "no quiero").let { phrases -> VoiceText.hasAny(text, phrases) } -> false
-        listOf("activ", "enciende", "prende", "pon ", "quiero").let { phrases -> VoiceText.hasAny(text, phrases) } -> true
+        listOf("desactiv*", "apaga", "quita", "sin", "no quiero").let { phrases -> VoiceText.hasAny(text, phrases) } -> false
+        listOf("activ*", "enciende", "prende", "pon", "quiero").let { phrases -> VoiceText.hasAny(text, phrases) } -> true
         else -> null
     }
 

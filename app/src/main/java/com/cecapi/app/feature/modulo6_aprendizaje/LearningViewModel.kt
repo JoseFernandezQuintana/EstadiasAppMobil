@@ -143,21 +143,30 @@ class LearningViewModel @Inject constructor(
         return "$place, ejercicio ${s.index + 1} de ${s.items.size}."
     }
 
-    /** The commands this screen answers. "Atrás" is not one: it is also an answer in level 3. */
+    /**
+     * The commands this screen answers. A sentence that contains an answer ("el sonido vino de la izquierda",
+     * "terminó en la derecha") is an answer, even if it also has a word that is a command elsewhere; so the
+     * answer check comes before repeat, next and back. "Atrás" and "adelante" are answers in level 3, so they
+     * are not commands here.
+     */
     private fun onSpeech(spoken: String) {
         val text = VoiceText.normalize(spoken)
         fun has(vararg words: String) = VoiceText.hasAny(text, *words)
         val chosenLevel = LEVEL_COMMAND.find(text)?.groupValues?.let { it[1].ifEmpty { it[2] } }
+        val awaitingAnswer = _state.value.current != null && !_state.value.busy
         when {
             CommandCatalog.isRequest(spoken) -> {
                 stopStimulus()
                 voiceEngine.speak(CommandCatalog.ACTIVITIES, listenAfter = true)
             }
-            has("vibracion", "vibraciones", "vibrar", "vibra", "vibrador", "con vibracion") -> setMode(ActivityMode.VIBRATION)
-            has("sonidos", "sonido", "audio", "audios", "escuchar sonidos", "oido", "oidos") -> setMode(ActivityMode.AUDIO)
             chosenLevel != null -> setLevel(levelNumber(chosenLevel))
+            text in VIBRATION_ONLY || has("modo vibracion", "cambia a vibracion", "cambiar a vibracion", "pasa a vibracion", "ejercicios de vibracion") ->
+                setMode(ActivityMode.VIBRATION)
+            text in SOUNDS_ONLY || has("modo sonidos", "cambia a sonidos", "cambiar a sonidos", "pasa a sonidos", "ejercicios de sonidos") ->
+                setMode(ActivityMode.AUDIO)
+            awaitingAnswer && categoriesIn(text).isNotEmpty() -> answer(spoken)
             has("repite", "repetir", "repiteme", "otra vez", "de nuevo", "escuchalo", "ponlo otra vez", "vuelve a poner", "vuelve a sonar", "no alcance a oir", "no escuche") -> repeat()
-            has("siguiente", "proximo", "continua", "continuar", "sigue", "el que sigue", "otro ejercicio", "otro", "adelante", "pasa al siguiente", "pasa") -> next()
+            has("siguiente", "proximo", "continua", "continuar", "sigue", "el que sigue", "otro ejercicio", "otro", "pasa al siguiente") -> next()
             has("volver", "vuelve", "salir", "menu", "regresar", "regresa", "terminar", "termina", "ya no quiero", "inicio") -> {
                 stopStimulus()
                 _back.tryEmit(Unit)
@@ -216,14 +225,19 @@ class LearningViewModel @Inject constructor(
             _state.value = _state.value.copy(busy = true)
             val talk = (intro + if (intro.isBlank()) "" else item.instruction).trim()
             if (talk.isNotEmpty()) speakAndWait(talk)
+            // The person left the app while it was talking: nothing should play or listen behind their back.
+            if (!voiceEngine.appVisible) return@launch stopStimulus()
             delay(300)
             item.sound?.let { audioPlayer.reproducir(it) }
             item.vibration?.let { vibrationEngine.reproducirPatron(it.patronMs.aPatronMs(), it.intensidad) }
             delay(500)
             _state.value = _state.value.copy(busy = false)
-            voiceEngine.startListening()
+            if (voiceEngine.appVisible) voiceEngine.startListening()
         }
     }
+
+    /** The app went to the background (home button, screen lock): stop the sound, the vibration and the exercise. */
+    fun onAppStopped() = stopStimulus()
 
     private fun stopStimulus() {
         exerciseJob?.cancel()
@@ -240,6 +254,23 @@ class LearningViewModel @Inject constructor(
 
     private fun answer(spoken: String) {
         val item = _state.value.current ?: return
+        val text = VoiceText.normalize(spoken)
+        val categories = categoriesIn(text)
+        val movement = movement(text)
+        val expectsMovement = VoiceText.normalize(item.answer).startsWith("de ")
+        val expectsMixed = VoiceText.normalize(item.answer) == "mixto"
+        // Nothing that sounds like an answer: do not grade it, the person may simply have said something else.
+        if (categories.isEmpty() && movement == 0) {
+            cues.play(FeedbackCues.Cue.NOT_UNDERSTOOD)
+            voiceEngine.speak("No entendí tu respuesta. Dila con una sola palabra, o di repite, o siguiente.", listenAfter = true)
+            return
+        }
+        // Several answers at once ("cerca, lejos, centro") would always be right by luck: ask for one.
+        if (!expectsMovement && !expectsMixed && categories.size > 1) {
+            cues.play(FeedbackCues.Cue.NOT_UNDERSTOOD)
+            voiceEngine.speak("Dime una sola respuesta.", listenAfter = true)
+            return
+        }
         val correct = matches(spoken, item.answer)
         val message = (if (correct) "Correcto" else "Incorrecto") + ", la respuesta era ${spokenAnswer(item.answer)}."
         cues.play(if (correct) FeedbackCues.Cue.SUCCESS else FeedbackCues.Cue.ERROR)
@@ -269,41 +300,36 @@ class LearningViewModel @Inject constructor(
     /** How the answer is said aloud: the code stores "centro", the recordings say "ambos lados". */
     private fun spokenAnswer(answer: String): String = if (VoiceText.normalize(answer) == "centro") "ambos lados" else answer
 
+    /** Which kinds of answer the sentence contains. One kind is a clear answer; several is not. */
+    private fun categoriesIn(text: String): Set<String> =
+        ANSWER_WORDS.filterValues { words -> VoiceText.hasAny(text, words) }.keys
+
+    /** +1 when the sound went from left to right, -1 from right to left, 0 when the sentence does not say. */
+    private fun movement(text: String): Int {
+        val left = text.indexOf("izquierd")
+        val right = text.indexOf("derech")
+        return when {
+            left >= 0 && right >= 0 -> if (left < right) 1 else -1
+            right >= 0 && VoiceText.hasAny(text, "hacia la derecha", "a la derecha", "hacia el lado derecho", "se fue a la derecha", "va a la derecha") -> 1
+            left >= 0 && VoiceText.hasAny(text, "hacia la izquierda", "a la izquierda", "hacia el lado izquierdo", "se fue a la izquierda", "va a la izquierda") -> -1
+            else -> 0
+        }
+    }
+
     /**
-     * Every answer accepts the several ways people say it, and small recognizer slips. "Centro" and "ambos
-     * lados" are the same answer. Movement ("de izquierda a derecha") is judged by the order of the two sides,
-     * or by where the sound went ("hacia la derecha").
+     * Every answer accepts the several ways people say it. "Centro" and "ambos lados" are the same answer.
+     * Movement ("de izquierda a derecha") is judged by the order of the two sides or by where the sound went
+     * ("hacia la derecha"). Any other answer is right only when it is the one kind of answer said.
      */
     private fun matches(spoken: String, expected: String): Boolean {
         val text = VoiceText.normalize(spoken)
         val want = VoiceText.normalize(expected)
-        fun said(vararg words: String) = VoiceText.hasAny(text, *words)
-        val left = text.indexOf("izquierd")
-        val right = text.indexOf("derech")
+        val categories = categoriesIn(text)
         return when (want) {
-            "de izquierda a derecha" -> when {
-                left >= 0 && right >= 0 -> left < right
-                else -> said("hacia la derecha", "a la derecha", "hacia el lado derecho", "se fue a la derecha", "va a la derecha")
-            }
-            "de derecha a izquierda" -> when {
-                left >= 0 && right >= 0 -> right < left
-                else -> said("hacia la izquierda", "a la izquierda", "hacia el lado izquierdo", "se fue a la izquierda", "va a la izquierda")
-            }
-            "izquierda" -> said("izquierda", "izquierdo", "lado izquierdo", "oido izquierdo") && !said("derecha", "derecho")
-            "derecha" -> said("derecha", "derecho", "lado derecho", "oido derecho") && !said("izquierda", "izquierdo")
-            "centro" -> said(
-                "centro", "ambos", "los dos", "medio", "en medio", "al centro", "de los dos lados", "por los dos lados",
-                "los dos lados", "ambos lados", "ambos oidos", "los dos oidos", "de ambos lados", "parejo",
-            )
-            "cerca" -> said("cerca", "cercano", "cerquita", "pegado", "muy cerca", "fuerte", "de cerca")
-            "lejos" -> said("lejos", "lejano", "distante", "alejado", "a lo lejos", "muy lejos", "bajito", "de lejos", "debil")
-            "enfrente" -> said("enfrente", "frente", "adelante", "al frente", "de frente", "delante", "por delante")
-            "atras" -> said("atras", "detras", "espalda", "de atras", "por atras", "por detras", "a mi espalda", "atrasito")
-            "corto" -> said("corto", "cortos", "cortito", "breve", "breves", "rapido", "rapidos") && !said("largo", "largos")
-            "largo" -> said("largo", "largos", "prolongado", "extenso", "lento", "sostenido") && !said("corto", "cortos", "breve")
-            "mixto" -> said("mixto", "mezcla", "mezclado", "combinado", "alternado", "variado", "corto y largo", "largo y corto") ||
-                (said("corto", "cortos", "breve") && said("largo", "largos"))
-            else -> want in text
+            "de izquierda a derecha" -> movement(text) > 0
+            "de derecha a izquierda" -> movement(text) < 0
+            "mixto" -> "mixto" in categories || categories == setOf("corto", "largo")
+            else -> categories == setOf(want)
         }
     }
 
@@ -316,5 +342,26 @@ class LearningViewModel @Inject constructor(
 
     private companion object {
         val LEVEL_COMMAND = Regex("(?:nivel (uno|dos|tres|1|2|3)|(primer|segundo|tercer) nivel)")
+
+        // Changing the activity needs the bare word or an explicit phrase: "vibró corto" is an answer.
+        val VIBRATION_ONLY = setOf("vibracion", "vibraciones", "vibrar", "la vibracion", "con vibracion")
+        val SOUNDS_ONLY = setOf("sonidos", "sonido", "audio", "audios", "los sonidos", "con sonidos")
+
+        /** Every way of saying each answer. Whole words only, so "acerca" is not "cerca". */
+        val ANSWER_WORDS: Map<String, List<String>> = mapOf(
+            "izquierda" to listOf("izquierda", "izquierdo", "lado izquierdo", "oido izquierdo"),
+            "derecha" to listOf("derecha", "derecho", "lado derecho", "oido derecho"),
+            "centro" to listOf(
+                "centro", "ambos", "los dos", "medio", "en medio", "al centro", "de los dos lados", "por los dos lados",
+                "los dos lados", "ambos lados", "ambos oidos", "los dos oidos", "de ambos lados", "parejo",
+            ),
+            "cerca" to listOf("cerca", "cercano", "cerquita", "pegado", "muy cerca", "fuerte", "de cerca"),
+            "lejos" to listOf("lejos", "lejano", "distante", "alejado", "a lo lejos", "muy lejos", "bajito", "de lejos", "debil"),
+            "enfrente" to listOf("enfrente", "frente", "adelante", "al frente", "de frente", "delante", "por delante"),
+            "atras" to listOf("atras", "detras", "espalda", "de atras", "por atras", "por detras", "a mi espalda", "atrasito"),
+            "corto" to listOf("corto", "cortos", "cortito", "breve", "breves", "rapido", "rapidos"),
+            "largo" to listOf("largo", "largos", "prolongado", "extenso", "lento", "sostenido"),
+            "mixto" to listOf("mixto", "mezcla", "mezclado", "combinado", "alternado", "variado", "corto y largo", "largo y corto"),
+        )
     }
 }

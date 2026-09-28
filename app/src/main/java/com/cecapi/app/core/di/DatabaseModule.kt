@@ -91,7 +91,7 @@ object DatabaseModule {
     private val demoUsers = listOf(
         DemoUser("CECAPI", "1234", "Usuario CECAPI", RolUsuario.ADMINISTRADOR, "admin"),
         DemoUser("PEPE", "1234", "Pepe", RolUsuario.ADMINISTRADOR, "admin"),
-        DemoUser("JORGE", "Hola", "Jorge", RolUsuario.DIRECTIVO, "CECAPI"),
+        DemoUser("JORGE", "4321", "Jorge", RolUsuario.DIRECTIVO, "CECAPI"),
         DemoUser("JUAN", "1234", "Juan", RolUsuario.ALUMNO, "CECAPI"),
     )
 
