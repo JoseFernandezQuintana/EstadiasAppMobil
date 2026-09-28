@@ -59,6 +59,7 @@ import com.cecapi.app.core.voice.VoiceState
 @Composable
 fun RegisterScreen(
     onRegisterSuccess: () -> Unit,
+    onBack: () -> Unit = {},
     viewModel: RegisterViewModel = hiltViewModel(),
 ) {
     val context = LocalContext.current
@@ -72,6 +73,9 @@ fun RegisterScreen(
 
     LaunchedEffect(Unit) {
         viewModel.registerSucceeded.collect { onRegisterSuccess() }
+    }
+    LaunchedEffect(Unit) {
+        viewModel.back.collect { onBack() }
     }
 
     Column(

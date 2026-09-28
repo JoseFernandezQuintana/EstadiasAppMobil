@@ -21,12 +21,15 @@ class GlobalVoiceCommands @Inject constructor(
     private val volumeControl: VolumeControl,
     private val notificationReader: NotificationReader,
     private val displayControl: DisplayControl,
+    private val commandHelp: CommandHelp,
 ) {
     init {
         voiceEngine.addSpeechInterceptor(::handle)
     }
 
     private fun handle(text: String): Boolean {
+        // "Otras formas de decirlo" answers itself (it speaks and may ask which area).
+        if (commandHelp.handle(text)) return true
         // Display commands first: the way out of the black screen must always work.
         val reply = displayControl.handle(text)
             ?: phoneStatusReader.answer(text)

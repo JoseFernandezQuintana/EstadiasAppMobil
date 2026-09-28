@@ -42,13 +42,16 @@ fun CecapiNavGraph(navController: NavHostController = rememberNavController()) {
             )
         }
         composable(CecapiDestinations.REGISTER) {
-            RegisterScreen(
-                onRegisterSuccess = {
-                    navController.navigate(CecapiDestinations.DASHBOARD) {
-                        popUpTo(CecapiDestinations.HOME) { inclusive = true }
-                    }
-                },
-            )
+            WakeScope {
+                RegisterScreen(
+                    onRegisterSuccess = {
+                        navController.navigate(CecapiDestinations.DASHBOARD) {
+                            popUpTo(CecapiDestinations.HOME) { inclusive = true }
+                        }
+                    },
+                    onBack = { navController.popBackStack() },
+                )
+            }
         }
         composable(CecapiDestinations.DASHBOARD) {
             DashboardScreen(
