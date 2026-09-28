@@ -83,11 +83,9 @@ class ListeningService : Service() {
 
     private fun startInForeground(): Boolean = try {
         val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            manager.createNotificationChannel(
-                NotificationChannel(CHANNEL_ID, "Asistente escuchando", NotificationManager.IMPORTANCE_LOW),
-            )
-        }
+        manager.createNotificationChannel(
+            NotificationChannel(CHANNEL_ID, "Asistente escuchando", NotificationManager.IMPORTANCE_LOW),
+        )
         val flags = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         val open = PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java), flags)
         val stop = PendingIntent.getService(this, 1, Intent(this, ListeningService::class.java).setAction(ACTION_STOP), flags)

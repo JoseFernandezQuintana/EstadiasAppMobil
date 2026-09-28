@@ -32,18 +32,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.cecapi.app.core.model.ModuloCecapi
 import com.cecapi.app.core.theme.CecapiAccent
 import com.cecapi.app.core.theme.CecapiEyebrowStyle
 import com.cecapi.app.core.theme.CecapiTextMuted
-import com.cecapi.app.core.ui.MenuItem
 import com.cecapi.app.core.ui.MicPad
 import com.cecapi.app.core.ui.ModuleCarousel
 import com.cecapi.app.core.ui.NoticeBanner
 import com.cecapi.app.core.ui.OfflineBanner
 import com.cecapi.app.core.ui.SuggestionChip
 import com.cecapi.app.core.ui.TopAction
-import com.cecapi.app.core.ui.toMenuItem
 import com.cecapi.app.core.voice.VoiceMessages
 import com.cecapi.app.core.voice.VoiceState
 

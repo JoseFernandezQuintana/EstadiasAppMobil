@@ -11,13 +11,10 @@ val CecapiSurface = Color(0xFF14141F)
 val CecapiSurfaceElevated = Color(0xFF1A1A26)
 val CecapiBorder = Color(0xFF2A2A38)
 
-val CecapiAccentStart = Color(0xFF22D3EE)
-val CecapiAccentEnd = Color(0xFF38BDF8)
 val CecapiAccent = Color(0xFF38BDF8)
 
 val CecapiTextPrimary = Color(0xFFF5F6FA)
 val CecapiTextMuted = Color(0xFF9AA0AE)
-val CecapiTextLabel = Color(0xFF7E8494)
 
 val CecapiSuccess = Color(0xFF22C55E)
 val CecapiError = Color(0xFFEF4444)

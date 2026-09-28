@@ -49,13 +49,7 @@ import com.cecapi.app.feature.modulo2_asistentevoz.HistorialComandoEntity
 import com.cecapi.app.feature.modulo2_asistentevoz.RespuestaAuditivaDao
 import com.cecapi.app.feature.modulo2_asistentevoz.RespuestaAuditivaEntity
 
-/**
- * Single Room database for the whole app. Each of the 7 v1.0 modules owns its
- * own tables (see docs/database/schema.sql for the equivalent raw DDL); this
- * is the "mixed" strategy from the proposal — per-module tables, one physical
- * database, so a defense can point at one team's 3 tables while the app still
- * ships as a single coherent product.
- */
+/** Single Room database for the whole app; each module owns its own tables. */
 @Database(
     entities = [
         // Módulo 1 — Aplicación Principal Accesible

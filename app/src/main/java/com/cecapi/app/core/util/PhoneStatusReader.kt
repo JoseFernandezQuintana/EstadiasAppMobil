@@ -32,9 +32,9 @@ class PhoneStatusReader @Inject constructor(
                 "como esta mi telefono", "como esta mi celular").let { phrases -> VoiceText.hasAny(text, phrases) } -> fullReport()
             listOf("bateria", "pila", "cuanta carga").let { phrases -> VoiceText.hasAny(text, phrases) } -> battery()
             listOf("wifi", "wi fi", "internet", "senal", "cobertura", "datos moviles", "conexion").let { phrases -> VoiceText.hasAny(text, phrases) } -> network()
-            Regex("\\bhora\\b").containsMatchIn(text) -> time()
-            Regex("\\bano\\b").containsMatchIn(text) -> year()
-            Regex("\\bmes\\b").containsMatchIn(text) -> month()
+            HOUR.containsMatchIn(text) -> time()
+            YEAR.containsMatchIn(text) -> year()
+            MONTH.containsMatchIn(text) -> month()
             listOf("que dia", "dia es", "dia de hoy").let { phrases -> VoiceText.hasAny(text, phrases) } -> today()
             "fecha" in text -> date()
             else -> null
@@ -116,6 +116,9 @@ class PhoneStatusReader @Inject constructor(
 
     private companion object {
         val LOCALE: Locale = Locale("es", "MX")
+        val HOUR = Regex("\\bhora\\b")
+        val YEAR = Regex("\\bano\\b")
+        val MONTH = Regex("\\bmes\\b")
     }
 
     /** ", señal buena" when the system reports a level; empty when it does not (older Android, or no value). */

@@ -51,7 +51,6 @@ import com.cecapi.app.core.theme.CecapiAccent
 import com.cecapi.app.core.theme.CecapiError
 import com.cecapi.app.core.theme.CecapiEyebrowStyle
 import com.cecapi.app.core.theme.CecapiTextMuted
-import com.cecapi.app.core.ui.VoiceCaptionBubble
 import com.cecapi.app.core.ui.VoiceMicButton
 import com.cecapi.app.core.ui.voiceHint
 import com.cecapi.app.core.voice.VoiceState

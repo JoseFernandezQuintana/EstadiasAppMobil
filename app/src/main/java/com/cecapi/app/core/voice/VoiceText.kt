@@ -11,6 +11,10 @@ object VoiceText {
      */
     fun fold(text: String): String = buildString(text.length) {
         for (ch in text) {
+            if (ch.code < 128) {
+                append(if (ch.isLetterOrDigit()) ch.lowercaseChar() else ' ')
+                continue
+            }
             val base = Normalizer.normalize(ch.toString(), Normalizer.Form.NFD).firstOrNull { it.isLetterOrDigit() }
             append(base?.lowercaseChar() ?: ' ')
         }
@@ -22,12 +26,18 @@ object VoiceText {
      * and emojis as their names, so both are dropped and bullets become plain sentences.
      */
     fun forSpeech(text: String): String = text
-        .replace(Regex("\\[([^\\]]+)]\\([^)]*\\)"), "$1") // [texto](enlace) -> texto
-        .replace(Regex("^\\s*[-•*]\\s+", RegexOption.MULTILINE), "") // list bullets
-        .replace(Regex("[*_`#>~]+"), " ") // markdown marks
-        .replace(Regex("[\\p{So}\\p{Cs}]"), "") // emojis and pictographs
-        .replace(Regex("\\s+"), " ")
+        .replace(MARKDOWN_LINK, "$1")
+        .replace(LIST_BULLET, "")
+        .replace(MARKDOWN_MARKS, " ")
+        .replace(EMOJI, "")
+        .replace(SPACES, " ")
         .trim()
+
+    private val MARKDOWN_LINK = Regex("\\[([^\\]]+)]\\([^)]*\\)") // [texto](enlace) -> texto
+    private val LIST_BULLET = Regex("^\\s*[-•*]\\s+", RegexOption.MULTILINE)
+    private val MARKDOWN_MARKS = Regex("[*_`#>~]+")
+    private val EMOJI = Regex("[\\p{So}\\p{Cs}]")
+    private val SPACES = Regex("\\s+")
 
     private val YES_WORDS = setOf(
         "si", "claro", "dale", "ok", "okey", "supuesto", "afirmativo", "correcto", "seguro", "hazlo", "confirmo",
@@ -42,7 +52,7 @@ object VoiceText {
     fun isYes(spoken: String): Boolean = !isNo(spoken) && normalize(spoken).split(" ").any { it in YES_WORDS }
 
     /** [fold] with repeated spaces collapsed: "¡Ingresa, el usuario!" -> "ingresa el usuario". */
-    fun normalize(text: String): String = fold(text).trim().replace(Regex("\\s+"), " ")
+    fun normalize(text: String): String = fold(text).trim().replace(SPACES, " ")
 
     /**
      * True when the normalized [text] contains any of the normalized [phrases], forgiving what a speech

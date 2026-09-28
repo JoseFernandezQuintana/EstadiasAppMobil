@@ -22,11 +22,9 @@ import com.cecapi.app.core.voice.WakeWordController
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
@@ -335,9 +333,6 @@ class DashboardViewModel @Inject constructor(
             _exitEvents.emit(Unit)
         }
     }
-
-    /** Called by the screen's own "Cerrar aplicación" chip. */
-    fun onExitRequested() = exitApp()
 
     private companion object {
         const val OFFLINE_NOTICE =

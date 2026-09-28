@@ -17,9 +17,7 @@ android {
         versionCode = 1
         versionName = "1.0"
 
-        // Placeholder: point this at YOUR backend proxy, never at api.anthropic.com
-        // directly — an Anthropic API key must never ship inside a mobile client.
-        // See feature/aiassistant/AiAssistantApi.kt for the expected request/response shape.
+        // Placeholder: the team's own AI backend, never a provider's API (see AiAssistantApi.kt).
         buildConfigField("String", "AI_PROXY_BASE_URL", "\"https://TU-BACKEND.example.com/api/asistente\"")
     }
 

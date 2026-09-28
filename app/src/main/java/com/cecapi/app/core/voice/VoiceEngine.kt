@@ -8,17 +8,12 @@ import android.media.AudioFormat
 import android.media.AudioManager
 import android.media.AudioRecord
 import android.media.MediaRecorder
-import android.media.ToneGenerator
 import android.media.audiofx.AcousticEchoCanceler
 import android.media.audiofx.NoiseSuppressor
-import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
-import android.os.VibrationEffect
-import android.os.Vibrator
-import android.os.VibratorManager
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
@@ -96,6 +91,14 @@ class VoiceEngine @Inject constructor(
     // is speaking or while a command is being captured, so it cannot trigger on its own voice.
     private val mainHandler = Handler(Looper.getMainLooper())
     private var wakeWords: Set<String> = emptySet()
+        set(value) {
+            field = value
+            wakePatterns = value.map { word ->
+                val pattern = word.split(' ').joinToString("\\s+") { Regex.escape(it) }
+                Regex("(?<![\\p{L}\\p{N}])$pattern(?![\\p{L}\\p{N}])")
+            }
+        }
+    private var wakePatterns: List<Regex> = emptyList()
     private var openMic = false
     private var wakeRecognizer: SpeechRecognizer? = null
     private val wakeRestart = Runnable { listenForWakeWord() }
@@ -159,7 +162,7 @@ class VoiceEngine @Inject constructor(
         if (text.length <= maxLength) return listOf(text)
         val parts = mutableListOf<String>()
         val current = StringBuilder()
-        for (sentence in text.split(Regex("(?<=[.!?…])\\s+"))) {
+        for (sentence in text.split(SENTENCE_END)) {
             if (current.isNotEmpty() && current.length + sentence.length + 1 > maxLength) {
                 parts.add(current.toString())
                 current.clear()
@@ -636,9 +639,8 @@ class VoiceEngine @Inject constructor(
     /** Index in [raw] right after the first wake word found, or null. [fold] keeps indexes 1:1 with [raw]. */
     private fun wakeWordEnd(raw: String): Int? {
         val folded = VoiceText.fold(raw)
-        for (word in wakeWords) {
-            val pattern = word.split(' ').joinToString("\\s+") { Regex.escape(it) }
-            val match = Regex("(?<![\\p{L}\\p{N}])$pattern(?![\\p{L}\\p{N}])").find(folded)
+        for (regex in wakePatterns) {
+            val match = regex.find(folded)
             if (match != null) return match.range.last + 1
         }
         return null
@@ -654,6 +656,7 @@ class VoiceEngine @Inject constructor(
 
     private companion object {
         const val TAG = "CecapiVoice"
+        val SENTENCE_END = Regex("(?<=[.!?…])\\s+")
 
         // Whole phrases only ("para" also appears inside everyday sentences).
         val SILENCE_PHRASES = setOf("silencio", "espera", "esperame", "callate", "un momento", "un segundo", "pausa")

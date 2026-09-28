@@ -5,7 +5,7 @@ import com.cecapi.app.core.voice.VoiceText
 /**
  * The spoken "lista de comandos" for each screen, kept in one place so it never drifts from what works.
  * Each list has only what is relevant to that screen. The commands that work everywhere are a separate
- * list ([GENERAL]), and the other ways of saying each command live in `CommandAlternatives`.
+ * list (`CommandAlternatives.GENERAL_LIST`), and the other ways of saying each command live in `CommandAlternatives`.
  */
 object CommandCatalog {
 
@@ -26,9 +26,6 @@ object CommandCatalog {
     private const val MORE =
         "Di otras formas de decirlo, para conocer más maneras de pedir estas cosas, o comandos generales, " +
             "para los que sirven en toda la aplicación."
-
-    /** What works on every screen. Also read when the person asks for "comandos generales". */
-    const val GENERAL = com.cecapi.app.core.voice.CommandAlternatives.GENERAL_LIST
 
     const val HOME =
         "Puedes decir: menú, o el nombre de una opción, como cámara, documentos, actividades, chats, personalización o configuración. " +
