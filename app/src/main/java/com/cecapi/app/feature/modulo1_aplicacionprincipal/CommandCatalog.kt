@@ -24,12 +24,12 @@ object CommandCatalog {
             "Qué notificaciones tengo. Dime más, para profundizar en lo último que respondí. Silencio, para que me calle un momento. Para, para detenerme del todo."
 
     const val HOME =
-        "Puedes decir: menú, o el nombre de una opción, como cámara, documentos, chats, personalización o configuración. " +
+        "Puedes decir: menú, o el nombre de una opción, como cámara, documentos, actividades, chats, personalización o configuración. " +
             "Qué hay enfrente, o leer texto. Iniciar sesión. " + EVERYWHERE +
             " Llámate, y un nombre, para ponerme nombre. Repite la solicitud anterior. Cerrar la aplicación."
 
     const val DASHBOARD =
-        "Puedes decir: menú, o el nombre de una opción, como cámara, documentos, chats, personalización o configuración. " +
+        "Puedes decir: menú, o el nombre de una opción, como cámara, documentos, actividades, chats, personalización o configuración. " +
             "Qué hay enfrente, o leer texto. " + EVERYWHERE +
             " Repite la solicitud anterior. Cerrar sesión. Cerrar la aplicación."
 
@@ -62,6 +62,14 @@ object CommandCatalog {
             "Mientras respondes las preguntas, di tu respuesta con normalidad. " +
             "Repite la pregunta, para escucharla otra vez. Cancelar, para elegir otra plantilla. " +
             "Atrás, para volver al menú. Lista de comandos, para repetir esta lista. " + EVERYWHERE
+
+    const val ACTIVITIES =
+        "En actividades escuchas un sonido y dices de dónde viene: izquierda, derecha, centro, cerca, lejos, " +
+            "de izquierda a derecha o de derecha a izquierda, y en el nivel tres también enfrente o atrás. " +
+            "En vibración dices si fue corto, largo o mixto. " +
+            "Repite, para escuchar otra vez. Siguiente, para el siguiente ejercicio. " +
+            "Nivel uno, nivel dos o nivel tres, para elegir el nivel. Vibración, o sonidos, para cambiar de actividad. " +
+            "Volver, para regresar al menú. Lista de comandos, para repetir esta lista. " + EVERYWHERE
 
     const val CHATS =
         "En chats puedes decir: lee el último, para escuchar la conversación más reciente. " +

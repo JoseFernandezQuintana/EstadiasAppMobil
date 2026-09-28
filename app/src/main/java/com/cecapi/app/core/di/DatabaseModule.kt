@@ -7,6 +7,7 @@ import androidx.room.Room
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.cecapi.app.core.data.AppDatabase
 import com.cecapi.app.core.data.MIGRATION_1_2
+import com.cecapi.app.core.data.MIGRATION_2_3
 import com.cecapi.app.core.util.PasswordHasher
 import com.cecapi.app.feature.modulo3_asistenteinteligente.ConsultaIaDao
 import com.cecapi.app.feature.modulo3_asistenteinteligente.ContextoConversacionDao
@@ -18,7 +19,8 @@ import com.cecapi.app.feature.modulo7_entorno.DescripcionEntornoDao
 import com.cecapi.app.feature.modulo7_entorno.EscaneoEntornoDao
 import com.cecapi.app.feature.modulo7_entorno.ObjetoDetectadoDao
 import com.cecapi.app.feature.modulo6_aprendizaje.EjercicioDao
-import com.cecapi.app.feature.modulo6_aprendizaje.EjercicioEntity
+import com.cecapi.app.feature.modulo6_aprendizaje.EjercicioVibracionDao
+import com.cecapi.app.feature.modulo6_aprendizaje.ResultadoVibracionDao
 import com.cecapi.app.feature.modulo6_aprendizaje.NivelAprendizajeDao
 import com.cecapi.app.feature.modulo6_aprendizaje.ResultadoEjercicioDao
 import com.cecapi.app.feature.modulo1_aplicacionprincipal.ConfiguracionUsuarioDao
@@ -54,7 +56,7 @@ object DatabaseModule {
         @ApplicationContext context: Context,
         databaseProvider: Provider<AppDatabase>,
     ): AppDatabase = Room.databaseBuilder(context, AppDatabase::class.java, "cecapi.db")
-        .addMigrations(MIGRATION_1_2)
+        .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
         .addCallback(object : androidx.room.RoomDatabase.Callback() {
             override fun onCreate(db: SupportSQLiteDatabase) {
                 super.onCreate(db)
@@ -138,47 +140,6 @@ object DatabaseModule {
                 ),
             ),
         )
-
-        database.ejercicioDao().insertAll(
-            listOf(
-                EjercicioEntity(
-                    titulo = "Saludo",
-                    instruccion = "Repite después de mí: hola, buenos días.",
-                    respuestaCorrecta = "hola buenos dias",
-                    nivel = 1,
-                ),
-                EjercicioEntity(
-                    titulo = "Comando básico",
-                    instruccion = "¿Qué palabra usarías para abrir el asistente de voz? Di: asistente de voz.",
-                    respuestaCorrecta = "asistente de voz",
-                    nivel = 1,
-                ),
-                EjercicioEntity(
-                    titulo = "Pedir ayuda",
-                    instruccion = "Di la palabra que usarías para pedir ayuda a la aplicación.",
-                    respuestaCorrecta = "ayuda",
-                    nivel = 1,
-                ),
-                EjercicioEntity(
-                    titulo = "Cámara inteligente",
-                    instruccion = "Di el nombre del módulo que lee documentos con la cámara.",
-                    respuestaCorrecta = "camara inteligente",
-                    nivel = 2,
-                ),
-                EjercicioEntity(
-                    titulo = "Solicitudes",
-                    instruccion = "Di el nombre del módulo donde generas cartas y solicitudes.",
-                    respuestaCorrecta = "centro de solicitudes",
-                    nivel = 2,
-                ),
-                EjercicioEntity(
-                    titulo = "Repaso final",
-                    instruccion = "Di: gracias por tu ayuda.",
-                    respuestaCorrecta = "gracias por tu ayuda",
-                    nivel = 3,
-                ),
-            ),
-        )
     }
 
     @Provides
@@ -234,6 +195,12 @@ object DatabaseModule {
 
     @Provides
     fun provideNivelAprendizajeDao(db: AppDatabase): NivelAprendizajeDao = db.nivelAprendizajeDao()
+
+    @Provides
+    fun provideEjercicioVibracionDao(db: AppDatabase): EjercicioVibracionDao = db.ejercicioVibracionDao()
+
+    @Provides
+    fun provideResultadoVibracionDao(db: AppDatabase): ResultadoVibracionDao = db.resultadoVibracionDao()
 
     @Provides
     fun provideEscaneoEntornoDao(db: AppDatabase): EscaneoEntornoDao = db.escaneoEntornoDao()

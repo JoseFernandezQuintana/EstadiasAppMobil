@@ -22,6 +22,10 @@ import com.cecapi.app.feature.modulo7_entorno.ObjetoDetectadoDao
 import com.cecapi.app.feature.modulo7_entorno.ObjetoDetectadoEntity
 import com.cecapi.app.feature.modulo6_aprendizaje.EjercicioDao
 import com.cecapi.app.feature.modulo6_aprendizaje.EjercicioEntity
+import com.cecapi.app.feature.modulo6_aprendizaje.EjercicioVibracionDao
+import com.cecapi.app.feature.modulo6_aprendizaje.EjercicioVibracionEntity
+import com.cecapi.app.feature.modulo6_aprendizaje.ResultadoVibracionDao
+import com.cecapi.app.feature.modulo6_aprendizaje.ResultadoVibracionEntity
 import com.cecapi.app.feature.modulo6_aprendizaje.NivelAprendizajeDao
 import com.cecapi.app.feature.modulo6_aprendizaje.NivelAprendizajeEntity
 import com.cecapi.app.feature.modulo6_aprendizaje.ResultadoEjercicioDao
@@ -78,12 +82,14 @@ import com.cecapi.app.feature.modulo2_asistentevoz.RespuestaAuditivaEntity
         EjercicioEntity::class,
         ResultadoEjercicioEntity::class,
         NivelAprendizajeEntity::class,
+        EjercicioVibracionEntity::class,
+        ResultadoVibracionEntity::class,
         // Módulo 7 — Asistente del Entorno
         EscaneoEntornoEntity::class,
         ObjetoDetectadoEntity::class,
         DescripcionEntornoEntity::class,
     ],
-    version = 2,
+    version = 3,
     exportSchema = false,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -110,6 +116,8 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun ejercicioDao(): EjercicioDao
     abstract fun resultadoEjercicioDao(): ResultadoEjercicioDao
     abstract fun nivelAprendizajeDao(): NivelAprendizajeDao
+    abstract fun ejercicioVibracionDao(): EjercicioVibracionDao
+    abstract fun resultadoVibracionDao(): ResultadoVibracionDao
 
     abstract fun escaneoEntornoDao(): EscaneoEntornoDao
     abstract fun objetoDetectadoDao(): ObjetoDetectadoDao

@@ -108,7 +108,7 @@ fun CecapiNavGraph(navController: NavHostController = rememberNavController()) {
             WakeScope { RequestsScreen(onBack = { navController.popBackStack() }) }
         }
         composable(CecapiDestinations.LEARNING) {
-            WakeScope { LearningScreen() }
+            WakeScope { LearningScreen(onBack = { navController.popBackStack() }) }
         }
         composable(CecapiDestinations.ENVIRONMENT) {
             WakeScope {
