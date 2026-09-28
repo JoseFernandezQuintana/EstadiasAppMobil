@@ -8,7 +8,11 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -36,6 +40,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
@@ -48,9 +53,8 @@ import com.cecapi.app.core.theme.CecapiEyebrowStyle
 import com.cecapi.app.core.theme.CecapiTextMuted
 import com.cecapi.app.core.ui.VoiceCaptionBubble
 import com.cecapi.app.core.ui.VoiceMicButton
+import com.cecapi.app.core.ui.voiceHint
 import com.cecapi.app.core.voice.VoiceState
-import androidx.compose.foundation.layout.size
-import androidx.compose.ui.unit.dp
 
 @Composable
 fun RegisterScreen(
@@ -64,7 +68,7 @@ fun RegisterScreen(
 
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
-    ) { granted -> if (granted) viewModel.onMicTapped() }
+    ) { granted -> if (granted) viewModel.onMicTapped() else viewModel.onMicPermissionDenied() }
 
     LaunchedEffect(Unit) {
         viewModel.registerSucceeded.collect { onRegisterSuccess() }
@@ -73,21 +77,17 @@ fun RegisterScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .verticalScroll(rememberScrollState())
             .padding(horizontal = 24.dp, vertical = 32.dp),
     ) {
         Text("CREAR CUENTA", style = CecapiEyebrowStyle, color = CecapiTextMuted)
         Text(
-            "Únete a CECAPI",
+            "Crea tu cuenta",
             style = MaterialTheme.typography.headlineMedium,
             color = MaterialTheme.colorScheme.onBackground,
         )
 
-        VoiceCaptionBubble(
-            text = (voiceState as? VoiceState.Speaking)?.text
-                ?: "Toca el micrófono y di tu nombre completo, o escríbelo abajo.",
-            modifier = Modifier.padding(top = 16.dp),
-        )
-
+        // What the voice says is not repeated on screen; the assistant guides the steps by voice.
         Box(modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp)) {
             VoiceMicButton(
                 isListening = voiceState is VoiceState.Listening,
@@ -109,7 +109,13 @@ fun RegisterScreen(
         OutlinedTextField(
             value = uiState.nombreCompleto,
             onValueChange = viewModel::onNombreCompletoChange,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 64.dp)
+                .voiceHint(
+                    help = "Campo de nombre completo. Aquí va tu nombre y apellido, como quieres que te salude.",
+                    focusLabel = "Campo de nombre completo. Escribe tu nombre y apellido.",
+                ),
             placeholder = { Text("Tu nombre y apellido") },
             leadingIcon = { Icon(Icons.Filled.Badge, contentDescription = null) },
             singleLine = true,
@@ -126,11 +132,22 @@ fun RegisterScreen(
         OutlinedTextField(
             value = uiState.nombreUsuario,
             onValueChange = viewModel::onNombreUsuarioChange,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 64.dp)
+                .voiceHint(
+                    help = "Campo de usuario. Elige el nombre corto con el que vas a entrar. " +
+                        "Se escribe en mayúsculas automáticamente.",
+                    focusLabel = "Campo de usuario. Elige un nombre corto para entrar.",
+                ),
             placeholder = { Text("Elige un nombre de usuario") },
             leadingIcon = { Icon(Icons.Filled.Person, contentDescription = null) },
             singleLine = true,
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
+            keyboardOptions = KeyboardOptions(
+                keyboardType = KeyboardType.Text,
+                capitalization = KeyboardCapitalization.Characters,
+                autoCorrectEnabled = false,
+            ),
             colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = CecapiAccent),
         )
 
@@ -143,7 +160,14 @@ fun RegisterScreen(
         OutlinedTextField(
             value = uiState.contrasena,
             onValueChange = viewModel::onContrasenaChange,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 64.dp)
+                .voiceHint(
+                    help = "Campo de contraseña. Elige una clave secreta de al menos cuatro caracteres. " +
+                        "Se ve oculta y nunca la leo en voz alta.",
+                    focusLabel = "Campo de contraseña. Elige una clave de al menos cuatro caracteres.",
+                ),
             placeholder = { Text("Mínimo cuatro caracteres") },
             leadingIcon = { Icon(Icons.Filled.Lock, contentDescription = null) },
             trailingIcon = {
@@ -175,7 +199,9 @@ fun RegisterScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(top = 24.dp)
-                .clip(RoundedCornerShape(50)),
+                .heightIn(min = 56.dp)
+                .clip(RoundedCornerShape(50))
+                .voiceHint("Crear mi cuenta. Guarda tus datos y abre tu cuenta nueva."),
             colors = ButtonDefaults.buttonColors(containerColor = CecapiAccent),
         ) {
             if (uiState.isSubmitting) {

@@ -4,11 +4,11 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- Simple microphone glyph -->
+    <!-- Simple microphone glyph, matches the voice-first home screen accent color -->
     <path
         android:fillColor="#38BDF8"
         android:pathData="M54,20 C60.6,20 66,25.4 66,32 L66,50 C66,56.6 60.6,62 54,62 C47.4,62 42,56.6 42,50 L42,32 C42,25.4 47.4,20 54,20 Z" />
     <path
         android:fillColor="#38BDF8"
-        android:pathData="M34,48 L40,48 L40,50 C40,60.5 47.5,68 54,68 C60.5,68 68,60.5 68,50 L68,48 L74,48 L74,50 C74,62.8 64.8,73.2 57,74.8 L57,84 L51,84 L51,74.8 C43.2,73.2 34,62.8 34,50 Z" />
+        android:pathData="M34,48 L40,48 L40,50 C40,60.5 47.5,68 54,68 C60.5,68 68,60.5 68,50 L68,48 L74,48 L74,50 C74,62.8 65,73 54,74.7 L54,84 L48,84 L48,74.7 C37,73 28,62.8 28,50 L28,48 Z" />
 </vector>

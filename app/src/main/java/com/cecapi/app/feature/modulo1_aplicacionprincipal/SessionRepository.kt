@@ -32,7 +32,7 @@ class SessionRepository @Inject constructor(
     suspend fun login(nombreUsuario: String, contrasena: String): LoginResult {
         val usuario = usuarioDao.findByUsername(nombreUsuario.trim())
             ?: return LoginResult.InvalidCredentials
-        val hashed = PasswordHasher.hash(contrasena)
+        val hashed = PasswordHasher.hash(contrasena.trim())
         if (usuario.contrasenaHash != hashed) {
             return LoginResult.InvalidCredentials
         }
@@ -44,9 +44,12 @@ class SessionRepository @Inject constructor(
      * no institutional approval step in v1.0 (see Módulo 13 in database/schema.sql for
      * the future admin-managed accounts flow). */
     suspend fun register(nombreUsuario: String, contrasena: String, nombreCompleto: String): RegisterResult {
+        val nombreNormalizado = nombreUsuario.trim().uppercase()
+        // The table has no unique index on the username, so the duplicate check has to be explicit.
+        if (usuarioDao.findByUsername(nombreNormalizado) != null) return RegisterResult.UsernameTaken
         val usuario = UsuarioEntity(
-            nombreUsuario = nombreUsuario.trim(),
-            contrasenaHash = PasswordHasher.hash(contrasena),
+            nombreUsuario = nombreNormalizado,
+            contrasenaHash = PasswordHasher.hash(contrasena.trim()),
             nombreCompleto = nombreCompleto.trim(),
         )
         val nuevoId = usuarioDao.insert(usuario)
@@ -57,16 +60,23 @@ class SessionRepository @Inject constructor(
         return RegisterResult.Success(usuarioCreado)
     }
 
+    private var logoutNoticePending = false
+
     fun logout() {
         _currentUser.value = null
+        logoutNoticePending = true
     }
+
+    /** True once after a logout, so the home screen can say "Sesión cerrada" as it opens. */
+    fun consumeLogoutNotice(): Boolean = logoutNoticePending.also { logoutNoticePending = false }
 
     /** Shared by login and register: sets up defaults for a brand-new account and is a
      * harmless no-op for a returning one, then applies saved voice settings and opens the session. */
     private suspend fun completeLogin(usuario: UsuarioEntity) {
         ensureDefaultPermisos(usuario.id)
-        val config = ensureDefaultConfiguracion(usuario.id)
-        voiceEngine.applyVoiceSettings(config.velocidadVoz, config.volumen)
+        // Voice speed and cues are per device now (DeviceSettings); the per-user row is kept only so
+        // older accounts and the database schema stay intact.
+        ensureDefaultConfiguracion(usuario.id)
         _currentUser.value = usuario
     }
 

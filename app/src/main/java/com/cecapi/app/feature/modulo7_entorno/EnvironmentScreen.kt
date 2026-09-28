@@ -2,75 +2,70 @@ package com.cecapi.app.feature.modulo7_entorno
 
 import android.Manifest
 import android.content.pm.PackageManager
-import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageCapture
-import androidx.camera.core.ImageCaptureException
-import androidx.camera.core.Preview
-import androidx.camera.lifecycle.ProcessCameraProvider
-import androidx.camera.view.PreviewView
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Camera
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import androidx.compose.material.icons.filled.Replay
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.cecapi.app.core.theme.CecapiAccent
-import com.cecapi.app.core.theme.CecapiEyebrowStyle
-import com.cecapi.app.core.theme.CecapiSurfaceElevated
-import com.cecapi.app.core.theme.CecapiTextMuted
+import com.cecapi.app.core.theme.CecapiBackground
+import com.cecapi.app.core.ui.ScreenTopBar
+import com.cecapi.app.core.ui.CameraViewfinder
+import com.cecapi.app.core.ui.CaptureButton
+import com.cecapi.app.core.ui.FramingGuide
+import com.cecapi.app.core.ui.SuggestionChip
+import com.cecapi.app.core.ui.TopAction
 import com.cecapi.app.core.ui.VoiceCaptionBubble
-import kotlinx.coroutines.launch
-import java.io.File
+import com.cecapi.app.core.ui.capturePhoto
 
 @Composable
 fun EnvironmentScreen(
+    onBack: () -> Unit,
+    onOpen: (String) -> Unit,
     viewModel: EnvironmentViewModel = hiltViewModel(),
 ) {
     val context = LocalContext.current
-    val lifecycleOwner = LocalLifecycleOwner.current
-    val coroutineScope = rememberCoroutineScope()
     val uiState by viewModel.uiState.collectAsState()
 
     var hasCameraPermission by remember {
         mutableStateOf(
             ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) ==
-                    PackageManager.PERMISSION_GRANTED,
+                PackageManager.PERMISSION_GRANTED,
         )
     }
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
-    ) { granted -> hasCameraPermission = granted }
+    ) { granted ->
+        hasCameraPermission = granted
+        if (!granted) viewModel.onCameraPermissionDenied()
+    }
 
     LaunchedEffect(Unit) {
         if (!hasCameraPermission) permissionLauncher.launch(Manifest.permission.CAMERA)
@@ -78,96 +73,95 @@ fun EnvironmentScreen(
 
     var imageCapture by remember { mutableStateOf<ImageCapture?>(null) }
 
-    Column(modifier = Modifier.fillMaxSize().padding(24.dp)) {
-        Text("ASISTENTE DEL ENTORNO", style = CecapiEyebrowStyle, color = CecapiTextMuted)
-        Text(
-            "Describe lo que está enfrente",
-            style = MaterialTheme.typography.headlineMedium,
-            color = MaterialTheme.colorScheme.onBackground,
+    val takePhoto: () -> Unit = {
+        val capture = imageCapture
+        if (capture == null) {
+            viewModel.onCaptureFailed()
+        } else {
+            capture.capturePhoto(
+                context = context,
+                folder = "cecapi_entorno",
+                onFailed = viewModel::onCaptureFailed,
+            ) { uri, path -> viewModel.onPhotoCaptured(uri, path) }
+        }
+    }
+
+    LaunchedEffect(Unit) { viewModel.captureRequests.collect { takePhoto() } }
+    LaunchedEffect(Unit) { viewModel.back.collect { onBack() } }
+    LaunchedEffect(Unit) { viewModel.routes.collect(onOpen) }
+
+    val statusText = when {
+        uiState.errorMessage != null -> uiState.errorMessage
+        uiState.isProcessing -> "Analizando el entorno."
+        uiState.descripcion != null -> uiState.descripcion
+        else -> "Apunta la cámara al frente y di qué hay enfrente."
+    }
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        CameraViewfinder(
+            hasPermission = hasCameraPermission,
+            onReady = { imageCapture = it },
+            modifier = Modifier.fillMaxSize(),
         )
 
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .aspectRatio(3f / 4f)
-                .padding(top = 16.dp)
-                .clip(RoundedCornerShape(16.dp))
-                .background(CecapiSurfaceElevated),
-            contentAlignment = Alignment.BottomCenter,
-        ) {
-            if (hasCameraPermission) {
-                AndroidView(
-                    modifier = Modifier.fillMaxSize(),
-                    factory = { ctx ->
-                        val previewView = PreviewView(ctx)
-                        val cameraProviderFuture = ProcessCameraProvider.getInstance(ctx)
-                        cameraProviderFuture.addListener({
-                            val cameraProvider = cameraProviderFuture.get()
-                            val preview = Preview.Builder().build().also { p ->
-                                p.setSurfaceProvider(previewView.surfaceProvider)
-                            }
-                            val capture = ImageCapture.Builder().build()
-                            imageCapture = capture
-                            try {
-                                cameraProvider.unbindAll()
-                                cameraProvider.bindToLifecycle(
-                                    lifecycleOwner,
-                                    CameraSelector.DEFAULT_BACK_CAMERA,
-                                    preview,
-                                    capture,
-                                )
-                            } catch (_: Exception) {
-                                // Camera unavailable (emulator without a virtual camera, etc.)
-                            }
-                        }, ContextCompat.getMainExecutor(ctx))
-                        previewView
-                    },
-                )
-            } else {
-                Text("Se necesita permiso de cámara.", color = CecapiTextMuted, modifier = Modifier.padding(16.dp))
-            }
-
-            Box(
+        if (hasCameraPermission) {
+            FramingGuide(
                 modifier = Modifier
-                    .padding(bottom = 20.dp)
-                    .size(72.dp)
-                    .clip(CircleShape)
-                    .background(CecapiAccent)
-                    .clickable(enabled = imageCapture != null && !uiState.isProcessing) {
-                        val capture = imageCapture ?: return@clickable
-                        val photoFile = File(
-                            context.filesDir,
-                            "cecapi_entorno/scan_${System.currentTimeMillis()}.jpg",
-                        ).apply { parentFile?.mkdirs() }
-                        val outputOptions = ImageCapture.OutputFileOptions.Builder(photoFile).build()
-                        capture.takePicture(
-                            outputOptions,
-                            ContextCompat.getMainExecutor(context),
-                            object : ImageCapture.OnImageSavedCallback {
-                                override fun onImageSaved(output: ImageCapture.OutputFileResults) {
-                                    val uri = output.savedUri ?: Uri.fromFile(photoFile)
-                                    coroutineScope.launch {
-                                        viewModel.onPhotoCaptured(uri, photoFile.absolutePath)
-                                    }
-                                }
-
-                                override fun onError(exception: ImageCaptureException) = Unit
-                            },
-                        )
-                    },
-                contentAlignment = Alignment.Center,
-            ) {
-                if (uiState.isProcessing) {
-                    CircularProgressIndicator(color = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(28.dp))
-                } else {
-                    Icon(Icons.Filled.Camera, contentDescription = "Capturar foto", tint = MaterialTheme.colorScheme.onPrimary)
-                }
-            }
+                    .align(Alignment.Center)
+                    .fillMaxWidth(0.8f)
+                    .aspectRatio(3f / 4f),
+            )
         }
 
-        VoiceCaptionBubble(
-            text = uiState.descripcion ?: uiState.errorMessage ?: "Apunta la cámara al frente y toca el botón para describir el entorno.",
-            modifier = Modifier.padding(top = 16.dp),
-        )
+        Column(
+            modifier = Modifier.fillMaxSize().padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            ScreenTopBar(
+                eyebrow = "CÁMARA",
+                title = "Qué hay enfrente",
+                onBack = onBack,
+                onCommands = viewModel::onCommandsRequested,
+            )
+
+            Spacer(modifier = Modifier.weight(1f))
+
+            // A long description scrolls inside its own box so the shutter button never leaves the screen.
+            VoiceCaptionBubble(
+                text = statusText ?: "",
+                modifier = Modifier.heightIn(max = 180.dp).verticalScroll(rememberScrollState()),
+            )
+
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
+                SuggestionChip(label = "qué hay enfrente", onClick = viewModel::pedirCaptura)
+            }
+
+            if (uiState.descripcion != null) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(24.dp))
+                        .background(CecapiBackground.copy(alpha = 0.82f))
+                        .padding(vertical = 8.dp),
+                    horizontalArrangement = Arrangement.Center,
+                ) {
+                    TopAction(
+                        icon = Icons.Filled.Replay,
+                        label = "Repetir",
+                        help = "Repetir. Vuelve a decir la última descripción.",
+                        onClick = viewModel::repetir,
+                    )
+                }
+            }
+
+            CaptureButton(
+                processing = uiState.isProcessing,
+                enabled = imageCapture != null && !uiState.isProcessing,
+                help = "Botón de captura. Toca dos veces para describir lo que hay enfrente. " +
+                    "También puedes decir: qué hay enfrente.",
+                onClick = viewModel::pedirCaptura,
+                modifier = Modifier.align(Alignment.CenterHorizontally),
+            )
+        }
     }
 }

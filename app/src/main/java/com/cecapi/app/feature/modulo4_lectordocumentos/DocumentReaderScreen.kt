@@ -59,15 +59,21 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.cecapi.app.core.ui.VoiceCaptionBubble
+import com.cecapi.app.core.ui.capturePhoto
 import kotlinx.coroutines.launch
 import java.io.File
 
 @Composable
 fun DocumentReaderScreen(
+    onBack: () -> Unit = {},
     onNavigateToMenu: () -> Unit = {},
+    onOpen: (String) -> Unit = {},
     viewModel: DocumentReaderViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
+
+    LaunchedEffect(Unit) { viewModel.back.collect { onBack() } }
+    LaunchedEffect(Unit) { viewModel.routes.collect(onOpen) }
 
     if (uiState.recognizedText != null && !uiState.isProcessing) {
         AudioControlScreen(
@@ -229,27 +235,35 @@ private fun CameraCaptureScreen(
                     ) {
                         if (isPreview) return@clickable
                         val capture = imageCapture ?: return@clickable
-                        val photoFile = File(
-                            context.filesDir,
-                            "cecapi_docs/scan_${System.currentTimeMillis()}.jpg",
-                        ).apply { parentFile?.mkdirs() }
-                        val outputOptions = ImageCapture.OutputFileOptions.Builder(photoFile).build()
-                        capture.takePicture(
-                            outputOptions,
-                            ContextCompat.getMainExecutor(context),
-                            object : ImageCapture.OnImageSavedCallback {
-                                override fun onImageSaved(output: ImageCapture.OutputFileResults) {
-                                    val uri = output.savedUri ?: Uri.fromFile(photoFile)
-                                    coroutineScope.launch {
-                                        onPhotoCaptured(uri, photoFile.absolutePath)
-                                    }
-                                }
+                        capture.capturePhoto(
+                            context = context,
+                            folder = "cecapi_docs",
+                            onFailed = {
+                                val photoFile = File(
+                                    context.filesDir,
+                                    "cecapi_docs/scan_${System.currentTimeMillis()}.jpg",
+                                ).apply { parentFile?.mkdirs() }
+                                val outputOptions = ImageCapture.OutputFileOptions.Builder(photoFile).build()
+                                capture.takePicture(
+                                    outputOptions,
+                                    ContextCompat.getMainExecutor(context),
+                                    object : ImageCapture.OnImageSavedCallback {
+                                        override fun onImageSaved(output: ImageCapture.OutputFileResults) {
+                                            val uri = output.savedUri ?: Uri.fromFile(photoFile)
+                                            coroutineScope.launch {
+                                                onPhotoCaptured(uri, photoFile.absolutePath)
+                                            }
+                                        }
 
-                                override fun onError(exception: ImageCaptureException) {
-                                    // Error manejado en ViewModel
-                                }
+                                        override fun onError(exception: ImageCaptureException) {
+                                            // Error manejado en ViewModel
+                                        }
+                                    },
+                                )
                             },
-                        )
+                        ) { uri, path ->
+                            coroutineScope.launch { onPhotoCaptured(uri, path) }
+                        }
                     },
                 contentAlignment = Alignment.Center,
             ) {

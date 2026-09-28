@@ -2,11 +2,16 @@ package com.cecapi.app.feature.modulo5_solicitudes
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.cecapi.app.core.voice.FeedbackCues
 import com.cecapi.app.core.voice.VoiceEngine
 import com.cecapi.app.core.voice.VoiceState
+import com.cecapi.app.core.voice.VoiceText
+import com.cecapi.app.feature.modulo1_aplicacionprincipal.CommandCatalog
 import com.cecapi.app.feature.modulo1_aplicacionprincipal.SessionRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -34,6 +39,7 @@ class RequestsViewModel @Inject constructor(
     private val voiceEngine: VoiceEngine,
     private val sessionRepository: SessionRepository,
     private val repository: RequestsRepository,
+    private val cues: FeedbackCues,
 ) : ViewModel() {
 
     val voiceState: StateFlow<VoiceState> = voiceEngine.state.stateIn(
@@ -51,15 +57,55 @@ class RequestsViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(RequestsUiState())
     val uiState: StateFlow<RequestsUiState> = _uiState.asStateFlow()
 
+    private val _back = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    val back: SharedFlow<Unit> = _back
+
     init {
-        voiceEngine.speak("Centro de solicitudes. Elige una plantilla para comenzar.")
+        voiceEngine.speak(
+            "Documentos. Elige una plantilla para comenzar. " + CommandCatalog.hint("documentos"),
+            listenAfter = true,
+        )
         viewModelScope.launch {
-            voiceEngine.recognizedSpeech.collect { speech ->
-                if (_uiState.value.plantillaSeleccionada != null && _uiState.value.textoGenerado == null) {
-                    onAnswerProvided(speech.text)
+            voiceEngine.recognizedSpeech.collect { speech -> onSpeech(speech.text) }
+        }
+    }
+
+    /**
+     * While a template is being filled in, whatever is said is the answer to the current question,
+     * except for the few control phrases below. Otherwise the person is choosing a template.
+     */
+    private fun onSpeech(spoken: String) {
+        val state = _uiState.value
+        val text = VoiceText.normalize(spoken)
+        fun has(vararg words: String) = words.any { it in text }
+        val answering = state.plantillaSeleccionada != null && state.textoGenerado == null
+        when {
+            CommandCatalog.isRequest(spoken) -> voiceEngine.speak(CommandCatalog.DOCUMENTS, listenAfter = true)
+            has("cancelar", "cancela", "reiniciar", "otra plantilla", "nueva plantilla") && state.plantillaSeleccionada != null ->
+                onReiniciar()
+            answering && has("repite la pregunta", "repite", "otra vez") ->
+                voiceEngine.speak(state.preguntaActual ?: "", listenAfter = true)
+            answering -> onAnswerProvided(spoken)
+            state.textoGenerado != null && has("repite", "otra vez", "lee", "leer") ->
+                voiceEngine.speak(state.textoGenerado)
+            has("atras", "volver", "salir", "menu", "regresa") -> _back.tryEmit(Unit)
+            else -> {
+                val elegida = plantillas.value.firstOrNull { plantilla ->
+                    VoiceText.normalize(plantilla.titulo).split(" ").filter { it.length > 3 }.any { it in text }
+                }
+                if (elegida != null) {
+                    onPlantillaSelected(elegida)
+                } else {
+                    cues.play(FeedbackCues.Cue.NOT_UNDERSTOOD)
+                    voiceEngine.speak("No entendí. " + CommandCatalog.hint("documentos"), listenAfter = true)
                 }
             }
         }
+    }
+
+    /** Call from a button: reads out this screen's commands. */
+    fun onCommandsRequested() {
+        voiceEngine.speak(CommandCatalog.DOCUMENTS, listenAfter = true)
     }
 
     fun onMicTapped() {
@@ -93,7 +139,11 @@ class RequestsViewModel @Inject constructor(
     }
 
     private fun finalizarSolicitud(plantilla: PlantillaSolicitudEntity, respuestas: Map<String, String>) {
-        val usuario = sessionRepository.currentUser.value ?: return
+        val usuario = sessionRepository.currentUser.value ?: run {
+            // Nobody signed in: say so instead of ignoring the user in silence.
+            voiceEngine.speak(com.cecapi.app.core.voice.VoiceMessages.NEEDS_LOGIN)
+            return
+        }
         viewModelScope.launch {
             val solicitud = repository.generarSolicitud(usuario.id, plantilla, respuestas)
             _uiState.value = _uiState.value.copy(textoGenerado = solicitud.textoFinal)

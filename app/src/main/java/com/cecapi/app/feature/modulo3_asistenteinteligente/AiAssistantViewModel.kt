@@ -48,7 +48,11 @@ class AiAssistantViewModel @Inject constructor(
     }
 
     fun onQuestionAsked(pregunta: String) {
-        val usuario = sessionRepository.currentUser.value ?: return
+        val usuario = sessionRepository.currentUser.value ?: run {
+            // Nobody signed in: say so instead of ignoring the user in silence.
+            voiceEngine.speak(com.cecapi.app.core.voice.VoiceMessages.NEEDS_LOGIN)
+            return
+        }
         if (!isOnline.value) {
             voiceEngine.speak("No hay conexión a internet. El asistente inteligente necesita internet para responder.")
             return

@@ -2,32 +2,76 @@ package com.cecapi.app.feature.modulo1_aplicacionprincipal
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.cecapi.app.core.model.ModuloCecapi
+import com.cecapi.app.core.navigation.CecapiDestinations
+import com.cecapi.app.core.ui.MenuItem
 import com.cecapi.app.core.util.ConnectivityObserver
+import com.cecapi.app.core.util.PhoneStatusReader
+import com.cecapi.app.core.util.VolumeControl
+import com.cecapi.app.core.voice.VoiceMessages
+import com.cecapi.app.core.voice.VoiceText
+import com.cecapi.app.core.voice.AssistantPreferences
+import com.cecapi.app.core.voice.FeedbackCues
+import com.cecapi.app.core.voice.DeviceSettings
+import com.cecapi.app.core.voice.IntentFallback
+import com.cecapi.app.core.voice.LaunchRequests
 import com.cecapi.app.core.voice.VoiceEngine
+import com.cecapi.app.notifications.NotificationReader
+import com.cecapi.app.core.voice.VoiceMemory
 import com.cecapi.app.core.voice.VoiceState
+import com.cecapi.app.core.voice.WakeWordController
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import javax.inject.Inject
 
 sealed interface HomeNavEvent {
     data object GoToLogin : HomeNavEvent
+    data object GoToSettings : HomeNavEvent
+    data object ExitApp : HomeNavEvent
     data class GoToModule(val route: String) : HomeNavEvent
 }
 
 @HiltViewModel
 class HomeViewModel @Inject constructor(
     private val voiceEngine: VoiceEngine,
-    connectivityObserver: ConnectivityObserver,
+    private val assistantPreferences: AssistantPreferences,
+    private val wakeWordController: WakeWordController,
+    private val phoneStatusReader: PhoneStatusReader,
+    private val voiceMemory: VoiceMemory,
+    private val volumeControl: VolumeControl,
+    private val cues: FeedbackCues,
+    private val launchRequests: LaunchRequests,
+    private val notificationReader: NotificationReader,
+    private val intentFallback: IntentFallback,
+    private val deviceSettings: DeviceSettings,
+    private val sessionRepository: SessionRepository,
+    private val connectivityObserver: ConnectivityObserver,
 ) : ViewModel() {
 
     val voiceState: StateFlow<VoiceState> = voiceEngine.state.stateIn(
         viewModelScope, SharingStarted.WhileSubscribed(5_000), VoiceState.Idle,
     )
+
+    val assistantName: StateFlow<String> = assistantPreferences.assistantName.stateIn(
+        viewModelScope, SharingStarted.Eagerly, "",
+    )
+
+    private var holdingWakeWord = false
+
+    /** The main menu. Same for everyone here; the dashboard filters it by what the account may use. */
+    val menu: List<MenuItem> = ModuleVoice.menu(ModuloCecapi.entries)
+
+    // This ViewModel outlives its screen while Login/Register are open on top of it, so it must
+    // ignore speech that belongs to those screens.
+    private var screenActive = false
 
     val isOnline: StateFlow<Boolean> = connectivityObserver.observe().stateIn(
         viewModelScope, SharingStarted.WhileSubscribed(5_000), true,
@@ -37,39 +81,239 @@ class HomeViewModel @Inject constructor(
     val navEvents: SharedFlow<HomeNavEvent> = _navEvents
 
     init {
-        voiceEngine.speak(
-            "Hola, estoy escuchándote. Toca el micrófono para hablar. " +
-                "Puedes decir iniciar sesión, ayuda o cámara.",
-        )
         viewModelScope.launch {
-            voiceEngine.recognizedSpeech.collect { speech ->
-                interpretCommand(speech.text.lowercase())
+            // Opened from the widget's "Hablar" button: answer and listen instead of the long greeting.
+            if (launchRequests.consumeListen()) {
+                voiceEngine.speak(voiceEngine.wakePrompt(), listenAfter = true)
+                return@launch
+            }
+            val name = assistantPreferences.assistantName.first()
+            val online = connectivityObserver.observe().first()
+            val loggedOut = if (sessionRepository.consumeLogoutNotice()) "Sesión cerrada. " else ""
+            val style = deviceSettings.addressStyle.first()
+            val intro = loggedOut + if (name.isBlank()) {
+                style.pick(
+                    "Hola, soy tu asistente. Di hola o toca el micrófono para hablar conmigo. " +
+                        "Si quieres, ponme un nombre: di por ejemplo, llámate Alice. ",
+                    "Hola, soy su asistente. Diga hola o toque el micrófono para hablar conmigo. " +
+                        "Si desea, póngame un nombre: diga por ejemplo, llámate Alice. ",
+                )
+            } else {
+                style.pick(
+                    "Hola, soy $name. Di hola o $name para hablar conmigo. ",
+                    "Hola, soy $name. Diga hola o $name para hablar conmigo. ",
+                )
+            }
+            // Connection status is only mentioned when there is a problem.
+            val offlineNotice = if (online) "" else "$OFFLINE_NOTICE "
+            voiceEngine.speak(
+                intro + offlineNotice + style.pick("Di menú para saber qué puedo hacer.", "Diga menú para saber qué puedo hacer."),
+            )
+        }
+        viewModelScope.launch {
+            var wasOnline: Boolean? = null
+            connectivityObserver.observe().collect { online ->
+                if (wasOnline == true && !online && screenActive) { cues.play(FeedbackCues.Cue.WARNING); voiceEngine.speak(OFFLINE_NOTICE) }
+                wasOnline = online
             }
         }
+        viewModelScope.launch {
+            voiceEngine.recognizedSpeech.collect { speech ->
+                if (screenActive) interpretCommand(speech.text.lowercase())
+            }
+        }
+    }
+
+    fun onModuleSelected(modulo: ModuloCecapi) {
+        cues.play(FeedbackCues.Cue.NAVIGATE)
+        voiceEngine.speak(modulo.voicePrompt)
+        _navEvents.tryEmit(HomeNavEvent.GoToModule(modulo.route))
+    }
+
+    fun onSettingsSelected() {
+        cues.play(FeedbackCues.Cue.NAVIGATE)
+        voiceEngine.speak("Abriendo la configuración.")
+        _navEvents.tryEmit(HomeNavEvent.GoToSettings)
+    }
+
+    /** A card of the main menu was tapped (or named out loud). */
+    fun onMenuItemSelected(item: MenuItem) = onMenuKey(item.key)
+
+    private fun onMenuKey(key: String) {
+        when (key) {
+            MenuItem.SETTINGS_KEY -> onSettingsSelected()
+            MenuItem.CAMERA_KEY -> openRoute(CecapiDestinations.CAMERA_HUB, "Abriendo la cámara.")
+            MenuItem.PERSONALIZATION_KEY -> openRoute(CecapiDestinations.PERSONALIZATION, "Abriendo la personalización.")
+            else -> ModuloCecapi.fromStorageCode(key)?.let(::onModuleSelected)
+        }
+    }
+
+    private fun openRoute(route: String, speech: String) {
+        cues.play(FeedbackCues.Cue.NAVIGATE)
+        voiceEngine.speak(speech)
+        _navEvents.tryEmit(HomeNavEvent.GoToModule(route))
+    }
+
+    private fun openCameraMode(route: String) = openRoute(
+        route,
+        if (route == CecapiDestinations.ENVIRONMENT) "Abriendo el asistente del entorno." else "Abriendo la cámara para leer texto.",
+    )
+
+    fun setScreenActive(active: Boolean) {
+        screenActive = active
+    }
+
+    /** Wake-word listening needs the mic permission, so the screen turns it on only once it has it. */
+    fun setWakeWordEnabled(enabled: Boolean) {
+        if (enabled == holdingWakeWord) return
+        holdingWakeWord = enabled
+        if (enabled) wakeWordController.acquire() else wakeWordController.release()
     }
 
     fun onMicTapped() {
         voiceEngine.startListening()
     }
 
+    /** The user refused the mic permission: say why nothing will happen instead of staying silent. */
+    fun onMicPermissionDenied() {
+        voiceEngine.speak(VoiceMessages.MIC_DENIED)
+    }
+
     fun onSuggestionTapped(command: String) {
         interpretCommand(command.lowercase())
     }
 
+    /** Handles "repite..." (again the last request, or the last answer); anything else is remembered and run. */
     private fun interpretCommand(text: String) {
+        when (voiceMemory.repeatKind(text)) {
+            VoiceMemory.Repeat.RESPONSE ->
+                voiceEngine.speak(voiceEngine.lastSpoken ?: "Todavía no he dicho nada.")
+            VoiceMemory.Repeat.REQUEST -> {
+                val previous = voiceMemory.lastRequest
+                if (previous == null) voiceEngine.speak("Todavía no me has pedido nada.") else runCommand(previous)
+            }
+            null -> {
+                voiceMemory.remember(text)
+                runCommand(text)
+            }
+        }
+    }
+
+    private fun runCommand(text: String, allowFallback: Boolean = true) {
+        // "dime más": go deeper on the last thing the AI answered.
+        intentFallback.deepQuestionFor(text)?.let { question ->
+            askAi(question, deep = true)
+            return
+        }
+        val newName = NAME_COMMAND.find(text)?.groupValues?.get(1)?.trim { !it.isLetterOrDigit() }
+        val phoneStatus = phoneStatusReader.answer(text)
+        // Changing the volume is an action, so only try it when nothing above already claimed the phrase.
+        val volume = if (newName == null && phoneStatus == null) volumeControl.handle(text) else null
+        val notification = notificationReader.handle(text)
+        val cameraRoute = ModuleVoice.directCameraRoute(text)
+        val menuKey = ModuleVoice.matchKey(text, menu)
         when {
-            "iniciar sesión" in text || "iniciar sesion" in text -> _navEvents.tryEmit(HomeNavEvent.GoToLogin)
+            newName != null -> saveAssistantName(newName)
+            phoneStatus != null -> voiceEngine.speak(phoneStatus)
+            volume != null -> voiceEngine.speak(volume)
+            notification != null -> voiceEngine.speak(notification)
+            SessionCommands.isExitApp(text) -> exitApp()
+            VoiceText.normalize(text).let { "configuracion" in it || "ajustes" in it } -> onSettingsSelected()
+            SessionCommands.isLogout(text) -> voiceEngine.speak("No tienes una sesión abierta.")
+            CommandCatalog.isRequest(text) -> voiceEngine.speak(CommandCatalog.HOME)
+            ModuleVoice.isListRequest(text) -> voiceEngine.speak(ModuleVoice.spokenList(menu))
+            cameraRoute != null -> openCameraMode(cameraRoute)
+            menuKey != null -> onMenuKey(menuKey)
+            "iniciar sesión" in text || "iniciar sesion" in text -> {
+                voiceEngine.speak("Abriendo el inicio de sesión.")
+                _navEvents.tryEmit(HomeNavEvent.GoToLogin)
+            }
             "ayuda" in text -> voiceEngine.speak(
-                "CECAPI te ayuda a escuchar tus documentos, hacer solicitudes y practicar el uso del teléfono. " +
-                    "Di iniciar sesión para comenzar.",
+                "Soy un asistente para personas invidentes. Puedo abrir la cámara para leer texto o describir lo que hay enfrente, " +
+                    "y decirte cómo está tu teléfono. Di menú, estado del teléfono, " +
+                    "batería, wifi, hora, fecha, o iniciar sesión. Si quieres que repita algo, " +
+                    "di repite la solicitud anterior. Di lista de comandos para escucharlos todos.",
             )
-            "cámara" in text || "camara" in text -> _navEvents.tryEmit(HomeNavEvent.GoToLogin)
-            else -> voiceEngine.speak("No entendí ese comando. Di iniciar sesión o ayuda.")
+            else -> notUnderstood(text, allowFallback)
+        }
+    }
+
+    /**
+     * Not one of our commands. If a resolver is registered (the AI team's "traductor de frases") and there is
+     * internet, it gets one chance to turn the phrase into a command we know; otherwise we say so.
+     */
+    private fun notUnderstood(text: String, allowFallback: Boolean) {
+        if (allowFallback && intentFallback.resolver != null && isOnline.value) {
+            askAi(text, deep = false)
+        } else {
+            sayNotUnderstood()
+        }
+    }
+
+    /** Asks the AI backend. It answers with a command to run, or a short answer to read aloud. */
+    private fun askAi(question: String, deep: Boolean) {
+        val resolver = intentFallback.resolver ?: return sayNotUnderstood()
+        viewModelScope.launch {
+            val reply = runCatching { resolver(question, deep) }.getOrNull()
+            val command = reply?.command
+            val answer = reply?.answer
+            when {
+                command != null -> runCommand(command, allowFallback = false)
+                answer != null -> {
+                    intentFallback.lastQuestion = question
+                    voiceEngine.speak(answer + if (reply.hasMore) " Si quieres saber más, di dime más." else "")
+                }
+                else -> sayNotUnderstood()
+            }
+        }
+    }
+
+    private fun sayNotUnderstood() {
+        cues.play(FeedbackCues.Cue.NOT_UNDERSTOOD)
+        voiceEngine.speak("No entendí ese comando. Di lista de comandos para escuchar lo que puedo hacer.")
+    }
+
+    /** Says goodbye, waits for it to finish, then closes the app so the phone is free again. */
+    private fun exitApp() {
+        voiceEngine.speak("Cerrando la aplicación. Hasta luego.")
+        viewModelScope.launch {
+            delay(300)
+            withTimeoutOrNull(6_000) { voiceEngine.state.first { it !is VoiceState.Speaking } }
+            _navEvents.emit(HomeNavEvent.ExitApp)
+        }
+    }
+
+    private fun saveAssistantName(name: String) {
+        if (name.isBlank() || name.length > MAX_NAME_LENGTH || name.equals(DEFAULT_WAKE_WORD, ignoreCase = true)) {
+            voiceEngine.speak("No pude usar ese nombre. Di por ejemplo: llámate Alice.")
+            return
+        }
+        val display = name.replaceFirstChar { it.uppercase() }
+        viewModelScope.launch {
+            assistantPreferences.setAssistantName(display)
+            voiceEngine.speak("Listo, ahora me llamo $display. Di hola o $display para hablar conmigo.")
         }
     }
 
     override fun onCleared() {
+        setWakeWordEnabled(false)
         voiceEngine.stopListening()
         super.onCleared()
+    }
+
+    private companion object {
+        const val DEFAULT_WAKE_WORD = "hola"
+        const val MAX_NAME_LENGTH = 30
+        const val OFFLINE_NOTICE =
+            "Ahora no tienes conexión a internet, así que mis respuestas pueden ser menos precisas."
+
+        // "llámate Luna", "quisiera llamarte Luna", "quiero que te llames Luna", "te llamas Luna",
+        // "te voy a llamar Luna", "tu nombre será Luna", "te pongo Luna", "ponte de nombre Luna"
+        val NAME_COMMAND = Regex(
+            "(?:l+[aá]ma(?:rte|te)|l+[aá]mar|te llam(?:as|es)|te llamar[eé]|" +
+                "tu nombre (?:es|ser[aá]|va a ser|sea)|ponerte(?: de)? nombre|ponte(?: de)? nombre|" +
+                "te pongo|te pondr[eé]|te voy a poner)" +
+                "\\s+(?:como\\s+|de\\s+|el nombre\\s+(?:de\\s+)?)?(.+)",
+        )
     }
 }
