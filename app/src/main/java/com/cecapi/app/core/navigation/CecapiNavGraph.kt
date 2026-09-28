@@ -92,7 +92,6 @@ fun CecapiNavGraph(navController: NavHostController = rememberNavController()) {
             WakeScope {
                 DocumentReaderScreen(
                     onBack = { navController.popBackStack() },
-                    onNavigateToMenu = { navController.popBackStack() },
                     onOpen = { route ->
                         navController.popBackStack()
                         navController.navigate(route)
