@@ -184,19 +184,26 @@ class HomeViewModel @Inject constructor(
         interpretCommand(command.lowercase())
     }
 
-    /** Handles "repite..." (again the last request, or the last answer); anything else is remembered and run. */
     private var pendingExit = false
+    private var pendingExitAskedAt = 0L
 
-    /** Answers "¿Cierro la aplicación? Di sí o no." Anything else is a normal command and cancels it. */
+    /**
+     * Answers "¿Cierro la aplicación? Di sí o no." Only for a short while, and only with a deliberate word:
+     * closing the app can happen to anyone, including a child, so a word that also means something else in
+     * passing conversation ("va", "sale") must not count.
+     */
     private fun handlePendingConfirm(text: String): Boolean {
-        if (!pendingExit) return false
+        if (!pendingExit || System.currentTimeMillis() - pendingExitAskedAt > EXIT_CONFIRM_WINDOW_MS) {
+            pendingExit = false
+            return false
+        }
         pendingExit = false
         return when {
             VoiceText.isNo(text) -> {
                 voiceEngine.speak("De acuerdo, no cierro nada.")
                 true
             }
-            VoiceText.isYes(text) -> {
+            VoiceText.normalize(text).split(" ").any { it in EXIT_CONFIRM_WORDS } -> {
                 exitApp()
                 true
             }
@@ -240,7 +247,8 @@ class HomeViewModel @Inject constructor(
             notification != null -> voiceEngine.speak(notification)
             SessionCommands.isExitApp(text) -> {
                 pendingExit = true
-                voiceEngine.speak("¿Cierro la aplicación? Di sí o no.", listenAfter = true)
+                pendingExitAskedAt = System.currentTimeMillis()
+                voiceEngine.speak("¿Cierro la aplicación? Di sí, cerrar, o no.", listenAfter = true)
             }
             VoiceText.normalize(text).let { "configuracion" in it || "ajustes" in it } -> onSettingsSelected()
             SessionCommands.isLogout(text) -> voiceEngine.speak("No tienes una sesión abierta.")
@@ -330,6 +338,9 @@ class HomeViewModel @Inject constructor(
         const val MAX_NAME_LENGTH = 30
         const val OFFLINE_NOTICE =
             "Ahora no tienes conexión a internet, así que mis respuestas pueden ser menos precisas."
+
+        const val EXIT_CONFIRM_WINDOW_MS = 30_000L
+        val EXIT_CONFIRM_WORDS = setOf("si", "cerrar", "cierra", "confirmo", "hazlo", "correcto")
 
         // "llámate Luna", "quisiera llamarte Luna", "quiero que te llames Luna", "te llamas Luna",
         // "te voy a llamar Luna", "tu nombre será Luna", "te pongo Luna", "ponte de nombre Luna"

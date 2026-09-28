@@ -24,6 +24,31 @@ class DisplayControl @Inject constructor(
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
+    init {
+        // Turning the black screen or the minimum brightness back to normal must always work, even on a screen
+        // that is capturing raw text (a username, a password, an answer in Documentos): otherwise the black
+        // screen's own instructions ("di pantalla normal") would stop working the moment someone needs them most.
+        voiceEngine.addCriticalSpeechInterceptor { spoken ->
+            val text = VoiceText.normalize(spoken)
+            val reply = when {
+                VoiceText.hasAny(text, BLACK_OFF_PHRASES) -> {
+                    scope.launch { deviceSettings.setBlackScreen(false) }
+                    BLACK_OFF
+                }
+                VoiceText.hasAny(text, BRIGHTNESS_NORMAL_PHRASES) -> {
+                    scope.launch { deviceSettings.setMinBrightness(false) }
+                    BRIGHTNESS_NORMAL
+                }
+                else -> null
+            }
+            if (reply != null) {
+                voiceEngine.activate() // "silencio" or "para" must not keep this safety exit from working
+                voiceEngine.speak(reply, force = true)
+            }
+            reply != null
+        }
+    }
+
     fun setBlackScreen(enabled: Boolean, announce: Boolean = true) {
         scope.launch { deviceSettings.setBlackScreen(enabled) }
         if (announce) voiceEngine.speak(if (enabled) BLACK_ON else BLACK_OFF)

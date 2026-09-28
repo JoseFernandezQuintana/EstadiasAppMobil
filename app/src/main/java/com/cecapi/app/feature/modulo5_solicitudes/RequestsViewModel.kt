@@ -146,8 +146,13 @@ class RequestsViewModel @Inject constructor(
 
     private fun finalizarSolicitud(plantilla: PlantillaSolicitudEntity, respuestas: Map<String, String>) {
         val usuario = sessionRepository.currentUser.value ?: run {
-            // Nobody signed in: say so instead of ignoring the user in silence.
-            voiceEngine.speak(com.cecapi.app.core.voice.VoiceMessages.NEEDS_LOGIN)
+            // Nobody signed in: say so, and close the form instead of leaving it stuck waiting for an
+            // answer that can never be saved ("atrás" would otherwise be swallowed as one more answer).
+            _uiState.value = RequestsUiState()
+            voiceEngine.speak(
+                com.cecapi.app.core.voice.VoiceMessages.NEEDS_LOGIN + " Di atrás para volver al menú.",
+                listenAfter = true,
+            )
             return
         }
         viewModelScope.launch {

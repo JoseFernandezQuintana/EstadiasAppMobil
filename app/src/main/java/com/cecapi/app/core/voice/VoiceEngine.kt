@@ -71,6 +71,13 @@ class VoiceEngine @Inject constructor(
     // Global voice commands (volume, phone status...) that work on every screen, registered by GlobalVoiceCommands.
     private val speechInterceptors = mutableListOf<(String) -> Boolean>()
 
+    /**
+     * Interceptors that run even while a screen is capturing raw text (a username, a password, an answer in
+     * Documentos): today only the black-screen and brightness exit, because the person must always have a way
+     * back to a normal screen, on every screen, with nothing swallowing it.
+     */
+    private val criticalInterceptors = mutableListOf<(String) -> Boolean>()
+
     /** The last thing the assistant said aloud, so "repite lo que dijiste" can say it again. */
     @Volatile
     var lastSpoken: String? = null
@@ -251,12 +258,18 @@ class VoiceEngine @Inject constructor(
         speechInterceptors.add(interceptor)
     }
 
+    /** Like [addSpeechInterceptor], but also runs while a screen is capturing raw text. See [criticalInterceptors]. */
+    fun addCriticalSpeechInterceptor(interceptor: (String) -> Boolean) {
+        criticalInterceptors.add(interceptor)
+    }
+
     /** "¿En qué te puedo ayudar?" in the wording the person chose (tú or usted). */
     fun wakePrompt(): String = addressStyle.pick(VoiceMessages.WAKE_PROMPT, VoiceMessages.WAKE_PROMPT_USTED)
 
     /** Every recognized phrase goes through here: control words first, then global commands, then the screens. */
     private fun dispatchSpeech(text: String) {
         if (handleControl(text)) return
+        if (criticalInterceptors.any { it(text) }) return
         // A screen that is capturing raw text (a username, a password) must receive it untouched.
         if (!rawInput && speechInterceptors.any { it(text) }) return
         if (!appVisible) {

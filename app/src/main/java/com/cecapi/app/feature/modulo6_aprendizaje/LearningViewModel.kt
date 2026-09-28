@@ -49,6 +49,8 @@ data class ActivitiesUiState(
     val correct: Boolean? = null,
     /** The instruction, the sound or the vibration is playing: answers are not taken yet. */
     val busy: Boolean = false,
+    /** The index already graded this round, so repeating the same answer does not add points again. */
+    val answeredIndex: Int = -1,
 ) {
     val current: ActivityItem? get() = items.getOrNull(index)
 }
@@ -130,6 +132,7 @@ class LearningViewModel @Inject constructor(
             index = 0,
             feedback = null,
             correct = null,
+            answeredIndex = -1,
         )
         if (list.isEmpty()) return
         // Let the welcome finish before the first exercise.
@@ -254,6 +257,11 @@ class LearningViewModel @Inject constructor(
 
     private fun answer(spoken: String) {
         val item = _state.value.current ?: return
+        // Already graded: repeating the same answer must not add points again. "Repite" only plays the sound.
+        if (_state.value.answeredIndex == _state.value.index) {
+            voiceEngine.speak("Ya respondiste este ejercicio. Di siguiente para continuar, o repite para escucharlo otra vez.", listenAfter = true)
+            return
+        }
         val text = VoiceText.normalize(spoken)
         val categories = categoriesIn(text)
         val movement = movement(text)
@@ -274,7 +282,7 @@ class LearningViewModel @Inject constructor(
         val correct = matches(spoken, item.answer)
         val message = (if (correct) "Correcto" else "Incorrecto") + ", la respuesta era ${spokenAnswer(item.answer)}."
         cues.play(if (correct) FeedbackCues.Cue.SUCCESS else FeedbackCues.Cue.ERROR)
-        _state.value = _state.value.copy(feedback = message, correct = correct)
+        _state.value = _state.value.copy(feedback = message, correct = correct, answeredIndex = _state.value.index)
         viewModelScope.launch {
             val user = sessionRepository.currentUser.value
             var levelUp = ""
@@ -344,8 +352,8 @@ class LearningViewModel @Inject constructor(
         val LEVEL_COMMAND = Regex("(?:nivel (uno|dos|tres|1|2|3)|(primer|segundo|tercer) nivel)")
 
         // Changing the activity needs the bare word or an explicit phrase: "vibró corto" is an answer.
-        val VIBRATION_ONLY = setOf("vibracion", "vibraciones", "vibrar", "la vibracion", "con vibracion")
-        val SOUNDS_ONLY = setOf("sonidos", "sonido", "audio", "audios", "los sonidos", "con sonidos")
+        val VIBRATION_ONLY = setOf("vibracion", "vibraciones", "vibrar", "la vibracion", "con vibracion", "vibrador")
+        val SOUNDS_ONLY = setOf("sonidos", "sonido", "audio", "audios", "los sonidos", "con sonidos", "oido")
 
         /** Every way of saying each answer. Whole words only, so "acerca" is not "cerca". */
         val ANSWER_WORDS: Map<String, List<String>> = mapOf(

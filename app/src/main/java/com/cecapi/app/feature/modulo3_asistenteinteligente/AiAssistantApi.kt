@@ -1,6 +1,7 @@
 package com.cecapi.app.feature.modulo3_asistenteinteligente
 
 import com.cecapi.app.BuildConfig
+import com.cecapi.app.core.voice.IntentFallback
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
@@ -35,10 +36,19 @@ interface AiAssistantApi {
  *   response: {"respuesta": "..."}
  */
 @Singleton
-class ProxyAiAssistantApi @Inject constructor() : AiAssistantApi {
+class ProxyAiAssistantApi @Inject constructor(
+    private val intentFallback: IntentFallback,
+) : AiAssistantApi {
 
     override suspend fun ask(pregunta: String, contexto: List<String>): Result<String> =
         withContext(Dispatchers.IO) {
+            // The person turns this on in Configuración; off by default (AI providers do not allow minors).
+            // Checked here, at the one place that actually reaches the network, so no caller can bypass it.
+            if (!intentFallback.enabled) {
+                return@withContext Result.failure(
+                    IllegalStateException("La inteligencia artificial está desactivada. Actívala en Configuración."),
+                )
+            }
             try {
                 val url = URL(BuildConfig.AI_PROXY_BASE_URL)
                 val connection = (url.openConnection() as HttpURLConnection).apply {

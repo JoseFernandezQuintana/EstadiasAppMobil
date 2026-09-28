@@ -111,21 +111,26 @@ class DashboardViewModel @Inject constructor(
         }
     }
 
-    /** Handles "repite..." (again the last request, or the last answer); anything else is remembered and run. */
     private enum class PendingConfirm { EXIT, LOGOUT }
 
     private var pendingConfirm: PendingConfirm? = null
+    private var pendingConfirmAskedAt = 0L
 
-    /** Answers the "¿Cierro...? Di sí o no." question. Anything else is a normal command and cancels it. */
+    /**
+     * Answers the "¿Cierro...? Di sí o no." question. Only for a short while, and only with a deliberate word:
+     * this can happen to anyone, including a child, so a word that also means something else in passing
+     * conversation ("va", "sale") must not count.
+     */
     private fun handlePendingConfirm(text: String): Boolean {
         val action = pendingConfirm ?: return false
         pendingConfirm = null
+        if (System.currentTimeMillis() - pendingConfirmAskedAt > EXIT_CONFIRM_WINDOW_MS) return false
         return when {
             VoiceText.isNo(text) -> {
                 voiceEngine.speak("De acuerdo, no cierro nada.")
                 true
             }
-            VoiceText.isYes(text) -> {
+            VoiceText.normalize(text).split(" ").any { it in EXIT_CONFIRM_WORDS } -> {
                 if (action == PendingConfirm.EXIT) exitApp() else onLogout()
                 true
             }
@@ -174,12 +179,14 @@ class DashboardViewModel @Inject constructor(
         // Leaving is hard to undo for someone who cannot see the screen, and a misheard word must not do it.
         if (SessionCommands.isExitApp(text)) {
             pendingConfirm = PendingConfirm.EXIT
-            voiceEngine.speak("¿Cierro la aplicación? Di sí o no.", listenAfter = true)
+            pendingConfirmAskedAt = System.currentTimeMillis()
+            voiceEngine.speak("¿Cierro la aplicación? Di sí, cerrar, o no.", listenAfter = true)
             return
         }
         if (SessionCommands.isLogout(text)) {
             pendingConfirm = PendingConfirm.LOGOUT
-            voiceEngine.speak("¿Cierro tu sesión? Di sí o no.", listenAfter = true)
+            pendingConfirmAskedAt = System.currentTimeMillis()
+            voiceEngine.speak("¿Cierro tu sesión? Di sí, cerrar, o no.", listenAfter = true)
             return
         }
         if (ModuleVoice.isListRequest(text)) {
@@ -337,5 +344,8 @@ class DashboardViewModel @Inject constructor(
     private companion object {
         const val OFFLINE_NOTICE =
             "Ahora no tienes conexión a internet, así que mis respuestas pueden ser menos precisas."
+
+        const val EXIT_CONFIRM_WINDOW_MS = 30_000L
+        val EXIT_CONFIRM_WORDS = setOf("si", "cerrar", "cierra", "confirmo", "hazlo", "correcto")
     }
 }

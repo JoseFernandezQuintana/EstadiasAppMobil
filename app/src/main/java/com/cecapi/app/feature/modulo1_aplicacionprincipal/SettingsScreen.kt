@@ -234,8 +234,9 @@ fun SettingsScreen(
                 description = "Todavía no está conectada. No la actives si quien usa la aplicación es menor de edad",
                 checked = aiEnabled,
                 onChange = viewModel::onAiEnabledChanged,
-                help = "Inteligencia artificial en internet. Apagada, nada de lo que dices se envía a ningún servidor. " +
+                help = "Inteligencia artificial en internet. Apagada, ninguna de tus preguntas se envía a un servidor para interpretarla. " +
                     "Encendida, cuando no entienda una frase y haya internet, podrá enviarla a un servidor para interpretarla. " +
+                    "Esto no cambia el reconocimiento de voz del teléfono, que sigue funcionando igual. " +
                     "Los proveedores de inteligencia artificial no permiten su uso con menores de edad. " +
                     "También puedes decir: activa la inteligencia artificial, o desactívala.",
             )

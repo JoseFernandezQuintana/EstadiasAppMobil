@@ -27,19 +27,23 @@ class PhoneStatusReader @Inject constructor(
     /** The spoken answer if [spoken] asks about the phone's state, or null if it is about something else. */
     fun answer(spoken: String): String? {
         val text = VoiceText.normalize(spoken)
+        val significant = text.split(" ").filter { it.isNotEmpty() && it !in FILLER }
         // Only a short question is about the phone. A longer sentence that merely mentions "hora" or "internet" is
         // an answer to a form or a question for the AI, and must reach the screen instead.
-        if (text.split(" ").count { it.isNotEmpty() && it !in FILLER } > MAX_TOPIC_WORDS) return null
+        if (significant.size > MAX_TOPIC_WORDS) return null
+        // The date words are common inside an ordinary sentence ("el 5 de este mes", "el año pasado"), so they
+        // only answer when the question is essentially bare: the trigger word and, at most, one filler-adjacent word.
+        val bareDateQuestion = significant.size <= 1
         return when {
             listOf("estado del telefono", "estado del celular", "estado de la pantalla", "estado del dispositivo",
                 "como esta mi telefono", "como esta mi celular").let { phrases -> VoiceText.hasAny(text, phrases) } -> fullReport()
             listOf("bateria", "pila", "cuanta carga").let { phrases -> VoiceText.hasAny(text, phrases) } -> battery()
             listOf("wifi", "wi fi", "internet", "senal", "cobertura", "datos moviles", "conexion").let { phrases -> VoiceText.hasAny(text, phrases) } -> network()
-            HOUR.containsMatchIn(text) -> time()
-            YEAR.containsMatchIn(text) -> year()
-            MONTH.containsMatchIn(text) -> month()
+            bareDateQuestion && HOUR.containsMatchIn(text) -> time()
+            bareDateQuestion && YEAR.containsMatchIn(text) -> year()
+            bareDateQuestion && MONTH.containsMatchIn(text) -> month()
             listOf("que dia", "dia es", "dia de hoy").let { phrases -> VoiceText.hasAny(text, phrases) } -> today()
-            VoiceText.hasAny(text, "fecha") -> date()
+            bareDateQuestion && VoiceText.hasAny(text, "fecha") -> date()
             else -> null
         }
     }
@@ -127,7 +131,7 @@ class PhoneStatusReader @Inject constructor(
             "que", "cual", "cuanto", "cuanta", "como", "esta", "estoy", "es", "el", "la", "los", "las", "de", "del", "en",
             "a", "un", "una", "y", "me", "mi", "dime", "dice", "dices", "puedes", "decir", "decirme", "por", "favor", "porfa",
             "oye", "hola", "asistente", "hoy", "ahora", "ahorita", "actual", "actualmente", "tengo", "hay", "queda", "este",
-            "estamos",
+            "estamos", "tiene", "tienes", "le",
         )
         const val MAX_TOPIC_WORDS = 2
 

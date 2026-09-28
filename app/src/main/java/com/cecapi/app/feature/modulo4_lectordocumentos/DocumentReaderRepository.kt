@@ -29,18 +29,20 @@ class DocumentReaderRepository @Inject constructor(
      * Rejects the photo before running ML Kit if it looks too dark or too blurry to read.
      */
     suspend fun processCapturedPhoto(usuarioId: Long, imageUri: Uri, rutaImagen: String): OcrOutcome {
+        // A rejected or failed photo is never written to the database, so nothing would ever delete it from
+        // disk on its own (not "libera espacio", not "borrar mi cuenta"). Clean it up right here instead.
         return try {
             val bitmap = decodeDownsampledBitmap(imageUri)
-                ?: return OcrOutcome.Error(IllegalStateException("No se pudo abrir la imagen: $imageUri"))
+                ?: return reject(rutaImagen, OcrOutcome.Error(IllegalStateException("No se pudo abrir la imagen: $imageUri")))
 
             val grises = toGrayscaleMatrix(bitmap)
             bitmap.recycle()
 
             if (averageLuminance(grises) < BRIGHTNESS_THRESHOLD) {
-                return OcrOutcome.PocaLuz
+                return reject(rutaImagen, OcrOutcome.PocaLuz)
             }
             if (laplacianVariance(grises) < BLUR_VARIANCE_THRESHOLD) {
-                return OcrOutcome.Borrosa
+                return reject(rutaImagen, OcrOutcome.Borrosa)
             }
 
             val inputImage = InputImage.fromFilePath(context, imageUri)
@@ -48,7 +50,7 @@ class DocumentReaderRepository @Inject constructor(
             val parrafos = visionText.textBlocks.map { it.text.trim() }.filter { it.isNotBlank() }
 
             if (parrafos.isEmpty()) {
-                return OcrOutcome.SinTexto
+                return reject(rutaImagen, OcrOutcome.SinTexto)
             }
 
             val documentoId = documentoDao.insert(
@@ -59,8 +61,13 @@ class DocumentReaderRepository @Inject constructor(
             )
             OcrOutcome.Exito(documentoId, parrafos)
         } catch (e: Exception) {
-            OcrOutcome.Error(e)
+            reject(rutaImagen, OcrOutcome.Error(e))
         }
+    }
+
+    private fun reject(rutaImagen: String, outcome: OcrOutcome): OcrOutcome {
+        runCatching { java.io.File(rutaImagen).delete() }
+        return outcome
     }
 
     suspend fun logLectura(documentoId: Long) {

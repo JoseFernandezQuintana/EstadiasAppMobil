@@ -238,7 +238,8 @@ class SettingsViewModel @Inject constructor(
                 "Inteligencia artificial activada. Cuando no entienda una frase y haya internet, podré enviarla a un servidor para interpretarla. " +
                     "Por ahora todavía no está conectada. No la actives si quien usa la aplicación es menor de edad."
             } else {
-                "Inteligencia artificial desactivada. Nada de lo que digas se envía por internet."
+                "Inteligencia artificial desactivada. Ninguna de tus preguntas se envía a un servidor para interpretarla. " +
+                    "El reconocimiento de voz del teléfono sigue funcionando como siempre."
             },
         )
     }

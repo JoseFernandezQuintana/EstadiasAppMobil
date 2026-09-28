@@ -110,6 +110,9 @@ class ChatsViewModel @Inject constructor(
     private val _state = MutableStateFlow(ChatsUiState())
     val state: StateFlow<ChatsUiState> = _state.asStateFlow()
 
+    /** When the last "¿borro...?" was asked; a confirmation only counts within [CONFIRM_WINDOW_MS]. */
+    private var pendingAskedAt = 0L
+
     private val _back = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     val back: SharedFlow<Unit> = _back
 
@@ -141,14 +144,14 @@ class ChatsViewModel @Inject constructor(
     private fun onSpeech(spoken: String) {
         val text = VoiceText.normalize(spoken)
         fun has(vararg words: String) = VoiceText.hasAny(text, *words)
-        // "si" and "no" must be whole words: "siguiente" contains "si".
-        val spokenWords = text.split(" ")
-        fun hasWord(vararg words: String) = words.any { it in spokenWords }
+        // A pending confirmation only counts for a short while and "no" always wins ("no estoy seguro" is a no).
         val pending = _state.value.pending
+            .takeIf { it != PendingDelete.NONE && System.currentTimeMillis() - pendingAskedAt < CONFIRM_WINDOW_MS }
+            ?: PendingDelete.NONE
         when {
             CommandCatalog.isRequest(spoken) -> onCommandsRequested()
-            pending != PendingDelete.NONE && hasWord("si", "claro", "dale", "ok", "okey", "supuesto", "afirmativo", "correcto", "seguro", "hazlo", "confirmo", "confirmar", "borralo", "borralos", "adelante") -> confirmDelete()
-            pending != PendingDelete.NONE && hasWord("no", "nunca", "negativo", "olvidalo", "dejalo", "cancela", "cancelar") -> cancelDelete()
+            pending != PendingDelete.NONE && VoiceText.isNo(spoken) -> cancelDelete()
+            pending != PendingDelete.NONE && VoiceText.isYes(spoken) -> confirmDelete()
             has("borra todos", "borrar todos", "elimina todos", "eliminar todos", "vacia") -> askDeleteAll()
             has("borra este", "borrar este", "elimina este", "eliminar este", "borra el chat", "borra el actual") -> askDeleteCurrent()
             has("cuantos") -> speakCount()
@@ -198,13 +201,15 @@ class ChatsViewModel @Inject constructor(
     fun askDeleteCurrent() {
         if (chats.value.isEmpty()) return speakCount()
         _state.value = _state.value.copy(pending = PendingDelete.ONE)
-        voiceEngine.speak("¿Borro el chat ${_state.value.current + 1}? Di sí o no.", listenAfter = true)
+        pendingAskedAt = System.currentTimeMillis()
+        voiceEngine.speak("¿Borro el chat ${_state.value.current + 1}? Di sí, borrar, o no.", listenAfter = true)
     }
 
     fun askDeleteAll() {
         if (chats.value.isEmpty()) return speakCount()
         _state.value = _state.value.copy(pending = PendingDelete.ALL)
-        voiceEngine.speak("¿Borro los ${chats.value.size} chats? No se pueden recuperar. Di sí o no.", listenAfter = true)
+        pendingAskedAt = System.currentTimeMillis()
+        voiceEngine.speak("¿Borro los ${chats.value.size} chats? No se pueden recuperar. Di sí, borrar, o no.", listenAfter = true)
     }
 
     fun cancelDelete() {
@@ -228,6 +233,11 @@ class ChatsViewModel @Inject constructor(
                 voiceEngine.speak("Listo, borré ese chat.", listenAfter = true)
             }
         }
+    }
+
+    private companion object {
+        /** A "sí" or "no" to "¿borro...?" only counts for this long; after that it is a normal command. */
+        const val CONFIRM_WINDOW_MS = 30_000L
     }
 }
 
