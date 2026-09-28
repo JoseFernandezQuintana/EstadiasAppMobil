@@ -110,6 +110,9 @@ class VoiceEngine @Inject constructor(
     private var wakeRecognizer: SpeechRecognizer? = null
     private val wakeRestart = Runnable { listenForWakeWord() }
 
+    /** How many wake-word restarts in a row failed with a network error; drives the backoff in [listenForWakeWord]. */
+    @Volatile private var consecutiveWakeNetworkErrors = 0
+
     // Barge-in: while the assistant talks, a light mic monitor (VOICE_COMMUNICATION source, so the
     // phone's echo canceller strips most of our own voice) cuts the speech if the user starts talking.
     @Volatile private var bargeInToken: AtomicBoolean? = null
@@ -591,17 +594,33 @@ class VoiceEngine @Inject constructor(
         recognizer.setRecognitionListener(object : RecognitionListener {
             override fun onError(error: Int) {
                 if (wakeRecognizer !== recognizer) return
-                resumeWakeWord(
+                val isNetworkError = error == SpeechRecognizer.ERROR_NETWORK ||
+                    error == SpeechRecognizer.ERROR_NETWORK_TIMEOUT ||
+                    error == SpeechRecognizer.ERROR_SERVER
+                // Without internet the online recognizer fails immediately, every time: restarting at the usual
+                // 300ms would poll like that forever and drain the battery. Back off, doubling each miss, only
+                // for network trouble; a normal "nobody said anything" (NO_MATCH/timeout) keeps restarting fast
+                // so "hola" still feels responsive.
+                if (isNetworkError) {
+                    consecutiveWakeNetworkErrors++
+                } else {
+                    consecutiveWakeNetworkErrors = 0
+                }
+                val delay = if (isNetworkError) {
+                    (300L shl (consecutiveWakeNetworkErrors - 1).coerceAtMost(6)).coerceAtMost(WAKE_NETWORK_BACKOFF_MAX_MS)
+                } else {
                     when (error) {
                         SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> 5_000L
                         SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> 1_500L
                         else -> 300L
-                    },
-                )
+                    }
+                }
+                resumeWakeWord(delay)
             }
 
             override fun onResults(results: Bundle?) {
                 if (wakeRecognizer !== recognizer) return
+                consecutiveWakeNetworkErrors = 0
                 val heard = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION).orEmpty()
                 // "silencio" and "para" work without saying "hola" first.
                 if (heard.any { handleControl(it) }) return
@@ -686,6 +705,9 @@ class VoiceEngine @Inject constructor(
         const val BARGE_IN_SETTLE_MS = 500L
         const val BARGE_IN_HOLD_MS = 300
         const val BARGE_IN_RMS_THRESHOLD = 1_800
+
+        /** Longest wait between wake-word restarts while the online recognizer keeps failing on the network. */
+        const val WAKE_NETWORK_BACKOFF_MAX_MS = 30_000L
     }
 
     fun release() {
