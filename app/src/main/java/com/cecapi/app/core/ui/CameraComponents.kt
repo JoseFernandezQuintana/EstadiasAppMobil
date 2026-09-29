@@ -40,6 +40,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
@@ -179,10 +180,11 @@ fun CaptureButton(
     help: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    size: Dp = 104.dp,
 ) {
     Box(
         modifier = modifier
-            .size(104.dp)
+            .size(size)
             .clip(CircleShape)
             .border(4.dp, CecapiTextPrimary, CircleShape)
             .padding(8.dp)
@@ -194,13 +196,13 @@ fun CaptureButton(
         contentAlignment = Alignment.Center,
     ) {
         if (processing) {
-            CircularProgressIndicator(color = CecapiBackground, modifier = Modifier.size(40.dp))
+            CircularProgressIndicator(color = CecapiBackground, modifier = Modifier.size(size * 0.38f))
         } else {
             Icon(
                 Icons.Filled.Camera,
                 contentDescription = null,
                 tint = CecapiBackground,
-                modifier = Modifier.size(44.dp),
+                modifier = Modifier.size(size * 0.42f),
             )
         }
     }

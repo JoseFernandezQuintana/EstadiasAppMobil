@@ -65,9 +65,6 @@ import com.cecapi.app.core.theme.ModuleLearningAccent
 import com.cecapi.app.core.ui.CameraViewfinder
 import com.cecapi.app.core.ui.CaptureButton
 import com.cecapi.app.core.ui.FramingGuide
-import com.cecapi.app.core.ui.ScreenTopBar
-import com.cecapi.app.core.ui.SuggestionChip
-import com.cecapi.app.core.ui.VoiceCaptionBubble
 import com.cecapi.app.core.ui.capturePhoto
 
 @Composable
@@ -137,15 +134,13 @@ fun DocumentReaderScreen(
             hasCameraPermission = hasCameraPermission,
             onReadyCamera = { imageCapture = it },
             onBack = onBack,
-            onCommands = viewModel::onCommandsRequested,
             onCaptureClick = { if (viewModel.onBotonCapturaPresionado()) takePhoto() },
-            onPedirCaptura = viewModel::pedirCaptura,
         )
     }
 }
 
 /**
- * Pantalla 1: Vista previa de cámara limpia a pantalla completa con guía de encuadre y obturador.
+ * Pantalla 1: Vista previa de cámara a pantalla completa con botón VOLVER AL MENÚ, guía de encuadre y obturador.
  */
 @Composable
 private fun DocumentCameraScreen(
@@ -153,17 +148,8 @@ private fun DocumentCameraScreen(
     hasCameraPermission: Boolean,
     onReadyCamera: (ImageCapture?) -> Unit,
     onBack: () -> Unit,
-    onCommands: () -> Unit,
     onCaptureClick: () -> Unit,
-    onPedirCaptura: () -> Unit,
 ) {
-    val statusText = when {
-        uiState.errorMessage != null -> uiState.errorMessage
-        uiState.isProcessing -> "Procesando la imagen..."
-        uiState.capturaArmada -> "Toca otra vez para tomar la foto."
-        else -> "Apunta la cámara al papel y di toma la foto."
-    }
-
     Box(modifier = Modifier.fillMaxSize().background(CecapiBackground)) {
         CameraViewfinder(
             hasPermission = hasCameraPermission,
@@ -180,24 +166,14 @@ private fun DocumentCameraScreen(
             )
         }
 
+        // Las instrucciones ("apunta la cámara", "toma la foto") solo se dan por voz desde el ViewModel.
         Column(
-            modifier = Modifier.fillMaxSize().padding(16.dp),
+            modifier = Modifier.fillMaxSize().padding(14.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            ScreenTopBar(
-                eyebrow = "CÁMARA",
-                title = "Leer texto",
-                onBack = onBack,
-                onCommands = onCommands,
-            )
+            VolverAlMenuButton(onClick = onBack)
 
             Spacer(modifier = Modifier.weight(1f))
-
-            VoiceCaptionBubble(text = statusText)
-
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
-                SuggestionChip(label = "toma la foto", onClick = onPedirCaptura)
-            }
 
             CaptureButton(
                 processing = uiState.isProcessing,
@@ -205,6 +181,7 @@ private fun DocumentCameraScreen(
                 help = "Botón de captura. Tócalo para tomar la foto del documento o di toma la foto.",
                 onClick = onCaptureClick,
                 modifier = Modifier.align(Alignment.CenterHorizontally),
+                size = 136.dp,
             )
         }
     }
@@ -232,51 +209,7 @@ private fun DocumentReadoutControlScreen(
             .padding(14.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        // Botón Superior Principal: VOLVER AL MENÚ PRINCIPAL (Tamaño GIGANTE de 82.dp)
-        val menuTint = Color(0xFFEF4444)
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(82.dp)
-                .clip(RoundedCornerShape(24.dp))
-                .background(CecapiSurfaceElevated)
-                .border(2.5.dp, menuTint, RoundedCornerShape(24.dp))
-                .semantics {
-                    role = Role.Button
-                    contentDescription = "Volver al menú principal"
-                }
-                .clickable { onBack() },
-            contentAlignment = Alignment.Center,
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.Center,
-                modifier = Modifier.padding(horizontal = 16.dp),
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(52.dp)
-                        .clip(CircleShape)
-                        .background(menuTint.copy(alpha = 0.2f))
-                        .border(2.dp, menuTint, CircleShape),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Home,
-                        contentDescription = null,
-                        tint = menuTint,
-                        modifier = Modifier.size(30.dp),
-                    )
-                }
-                Spacer(modifier = Modifier.size(14.dp))
-                Text(
-                    text = "VOLVER AL MENÚ PRINCIPAL",
-                    fontSize = 21.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                    color = CecapiTextPrimary,
-                )
-            }
-        }
+        VolverAlMenuButton(onClick = onBack)
 
         // Tarjeta 1 Futurista: PAUSAR / REANUDAR
         val pauseTint = CecapiAccent
@@ -493,6 +426,57 @@ private fun DocumentReadoutControlScreen(
                     color = CecapiTextPrimary,
                 )
             }
+        }
+    }
+}
+
+/**
+ * Botón GIGANTE para volver al menú principal, compartido por la cámara y la pantalla de lectura.
+ */
+@Composable
+private fun VolverAlMenuButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val menuTint = Color(0xFFEF4444)
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(82.dp)
+            .clip(RoundedCornerShape(24.dp))
+            .background(CecapiSurfaceElevated)
+            .border(2.5.dp, menuTint, RoundedCornerShape(24.dp))
+            .semantics {
+                role = Role.Button
+                contentDescription = "Volver al menú principal"
+            }
+            .clickable { onClick() },
+        contentAlignment = Alignment.Center,
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center,
+            modifier = Modifier.padding(horizontal = 16.dp),
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(52.dp)
+                    .clip(CircleShape)
+                    .background(menuTint.copy(alpha = 0.2f))
+                    .border(2.dp, menuTint, CircleShape),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Home,
+                    contentDescription = null,
+                    tint = menuTint,
+                    modifier = Modifier.size(30.dp),
+                )
+            }
+            Spacer(modifier = Modifier.size(14.dp))
+            Text(
+                text = "VOLVER AL MENÚ PRINCIPAL",
+                fontSize = 21.sp,
+                fontWeight = FontWeight.ExtraBold,
+                color = CecapiTextPrimary,
+            )
         }
     }
 }
