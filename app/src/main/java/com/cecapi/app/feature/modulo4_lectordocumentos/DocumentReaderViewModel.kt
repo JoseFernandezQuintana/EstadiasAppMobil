@@ -1,6 +1,7 @@
 package com.cecapi.app.feature.modulo4_lectordocumentos
 
 import android.net.Uri
+import android.os.SystemClock
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.cecapi.app.core.navigation.CecapiDestinations
@@ -67,6 +68,12 @@ class DocumentReaderViewModel @Inject constructor(
 
     private val _routes = MutableSharedFlow<String>(extraBufferCapacity = 1)
     val routes: SharedFlow<String> = _routes
+
+    // Guía de encuadre: solo se habla cuando la misma indicación se repite (evita ruido de un cuadro suelto).
+    private var ultimaPista: FramingHint? = null
+    private var pistaRepetida = 0
+    private var pistaDicha: FramingHint? = null
+    private var momentoPistaDicha = 0L
 
     init {
         observarFinDeParrafo()
@@ -136,6 +143,41 @@ class DocumentReaderViewModel @Inject constructor(
         _captureRequests.tryEmit(Unit)
     }
 
+    /**
+     * Recibe lo que ve la cámara en vivo y guía por voz ("mueve el teléfono a la izquierda", "acércalo un poco").
+     * No interrumpe otra frase ni el micrófono abierto, y no repite la misma indicación muy seguido.
+     */
+    fun onFramingHint(pista: FramingHint) {
+        val state = _uiState.value
+        if (state.isProcessing || state.parrafos.isNotEmpty()) return
+
+        pistaRepetida = if (pista == ultimaPista) pistaRepetida + 1 else 1
+        ultimaPista = pista
+        val necesarias = if (pista == FramingHint.SIN_TEXTO) CUADROS_SIN_TEXTO else CUADROS_PISTA
+        if (pistaRepetida < necesarias) return
+        if (voiceEngine.state.value != VoiceState.Idle) return
+        if (pista == FramingHint.LISTO && pistaDicha == FramingHint.LISTO) return
+
+        val ahora = SystemClock.elapsedRealtime()
+        val espera = when {
+            pista != pistaDicha -> ESPERA_CAMBIO_MS
+            pista == FramingHint.SIN_TEXTO -> ESPERA_SIN_TEXTO_MS
+            else -> ESPERA_REPETIR_MS
+        }
+        if (ahora - momentoPistaDicha < espera) return
+
+        pistaDicha = pista
+        momentoPistaDicha = ahora
+        voiceEngine.speak(pista.mensaje)
+    }
+
+    private fun reiniciarGuia() {
+        ultimaPista = null
+        pistaRepetida = 0
+        pistaDicha = null
+        momentoPistaDicha = 0L
+    }
+
     fun onCameraPermissionDenied() {
         voiceEngine.speak("Sin el permiso de la cámara no puedo leer. Actívalo en los ajustes de la aplicación.")
     }
@@ -174,13 +216,20 @@ class DocumentReaderViewModel @Inject constructor(
                 }
                 OcrOutcome.PocaLuz -> falloDeLectura("La imagen está muy oscura. Busca mejor iluminación e intenta de nuevo.")
                 OcrOutcome.Borrosa -> falloDeLectura("La imagen salió borrosa. Sostén el teléfono firme y vuelve a intentar.")
-                OcrOutcome.SinTexto -> falloDeLectura("No se detectó texto en la imagen.")
+                OcrOutcome.SinTexto -> falloDeLectura("No se detectó texto en la imagen. " + consejoSinTexto())
                 is OcrOutcome.Error -> falloDeLectura("No se pudo leer el texto de la imagen. Intenta con mejor iluminación.")
             }
         }
     }
 
+    /** Usa lo último que vio la cámara en vivo para decir cómo corregir la foto. */
+    private fun consejoSinTexto(): String = when (val pista = ultimaPista) {
+        null, FramingHint.LISTO, FramingHint.SIN_TEXTO -> FramingHint.SIN_TEXTO.mensaje
+        else -> pista.mensaje
+    }
+
     private fun falloDeLectura(message: String) {
+        reiniciarGuia()
         _uiState.value = DocumentReaderUiState(errorMessage = message)
         cues.play(FeedbackCues.Cue.ERROR)
         voiceEngine.speak("$message Di toma la foto para intentarlo otra vez.", listenAfter = true)
@@ -279,6 +328,7 @@ class DocumentReaderViewModel @Inject constructor(
 
     private fun nuevaFoto(tomarYa: Boolean) {
         detenerLectura()
+        reiniciarGuia()
         _uiState.value = DocumentReaderUiState()
         if (tomarYa) {
             pedirCaptura()
@@ -335,6 +385,16 @@ class DocumentReaderViewModel @Inject constructor(
         } else {
             _uiState.value = state.copy(estaLeyendo = false, estaPausado = false)
         }
+    }
+
+    private companion object {
+        /** Cuadros seguidos (uno cada ~0.7 s) con la misma indicación antes de decirla. */
+        const val CUADROS_PISTA = 2
+        const val CUADROS_SIN_TEXTO = 4
+
+        const val ESPERA_CAMBIO_MS = 2_500L
+        const val ESPERA_REPETIR_MS = 5_000L
+        const val ESPERA_SIN_TEXTO_MS = 10_000L
     }
 
     override fun onCleared() {

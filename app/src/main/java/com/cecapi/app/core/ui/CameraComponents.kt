@@ -3,6 +3,7 @@ package com.cecapi.app.core.ui
 import android.content.Context
 import android.net.Uri
 import androidx.camera.core.CameraSelector
+import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageCapture
 import androidx.camera.core.ImageCaptureException
 import androidx.camera.core.Preview
@@ -51,16 +52,22 @@ import com.cecapi.app.core.theme.CecapiSurfaceElevated
 import com.cecapi.app.core.theme.CecapiTextMuted
 import com.cecapi.app.core.theme.CecapiTextPrimary
 import java.io.File
+import java.util.concurrent.Executors
+
+/** One background thread for live frame analysis, shared by every viewfinder so none is leaked. */
+private val analysisExecutor by lazy { Executors.newSingleThreadExecutor() }
 
 /**
  * The live camera picture shared by the text reader and the environment assistant. Calls [onReady]
  * with the capture use case once the camera is running, or with null if the camera cannot start.
+ * An optional [analyzer] receives the live frames (for example, to guide the framing by voice).
  */
 @Composable
 fun CameraViewfinder(
     hasPermission: Boolean,
     onReady: (ImageCapture?) -> Unit,
     modifier: Modifier = Modifier,
+    analyzer: ImageAnalysis.Analyzer? = null,
 ) {
     val lifecycleOwner = LocalLifecycleOwner.current
     Box(
@@ -79,14 +86,31 @@ fun CameraViewfinder(
                             p.setSurfaceProvider(previewView.surfaceProvider)
                         }
                         val capture = ImageCapture.Builder().build()
+                        val analysis = analyzer?.let {
+                            ImageAnalysis.Builder()
+                                .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                                .build()
+                                .apply { setAnalyzer(analysisExecutor, it) }
+                        }
                         try {
                             cameraProvider.unbindAll()
-                            cameraProvider.bindToLifecycle(
-                                lifecycleOwner,
-                                CameraSelector.DEFAULT_BACK_CAMERA,
-                                preview,
-                                capture,
-                            )
+                            try {
+                                cameraProvider.bindToLifecycle(
+                                    lifecycleOwner,
+                                    CameraSelector.DEFAULT_BACK_CAMERA,
+                                    *listOfNotNull(preview, capture, analysis).toTypedArray(),
+                                )
+                            } catch (e: Exception) {
+                                // Some cameras cannot run the frame analysis at the same time: keep preview and capture.
+                                if (analysis == null) throw e
+                                cameraProvider.unbindAll()
+                                cameraProvider.bindToLifecycle(
+                                    lifecycleOwner,
+                                    CameraSelector.DEFAULT_BACK_CAMERA,
+                                    preview,
+                                    capture,
+                                )
+                            }
                             onReady(capture)
                         } catch (_: Exception) {
                             // Camera unavailable (emulator without a virtual camera, etc.)

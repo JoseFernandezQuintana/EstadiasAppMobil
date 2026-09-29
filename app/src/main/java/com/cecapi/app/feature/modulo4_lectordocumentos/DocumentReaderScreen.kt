@@ -33,6 +33,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -135,6 +136,7 @@ fun DocumentReaderScreen(
             onReadyCamera = { imageCapture = it },
             onBack = onBack,
             onCaptureClick = { if (viewModel.onBotonCapturaPresionado()) takePhoto() },
+            onFramingHint = viewModel::onFramingHint,
         )
     }
 }
@@ -149,12 +151,18 @@ private fun DocumentCameraScreen(
     onReadyCamera: (ImageCapture?) -> Unit,
     onBack: () -> Unit,
     onCaptureClick: () -> Unit,
+    onFramingHint: (FramingHint) -> Unit = {},
 ) {
+    // Analiza la vista previa para guiar por voz hacia dónde mover el teléfono; se apaga al salir de la cámara.
+    val framingAnalyzer = remember { TextFramingAnalyzer(onFramingHint) }
+    DisposableEffect(framingAnalyzer) { onDispose { framingAnalyzer.close() } }
+
     Box(modifier = Modifier.fillMaxSize().background(CecapiBackground)) {
         CameraViewfinder(
             hasPermission = hasCameraPermission,
             onReady = onReadyCamera,
             modifier = Modifier.fillMaxSize(),
+            analyzer = framingAnalyzer,
         )
 
         if (hasCameraPermission) {
