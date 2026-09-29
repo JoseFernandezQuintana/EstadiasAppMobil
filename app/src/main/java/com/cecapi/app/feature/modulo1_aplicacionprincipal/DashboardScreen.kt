@@ -142,6 +142,7 @@ fun DashboardScreen(
         }
 
         MicPad(
+            onDoubleTap = viewModel::onMicDoubleTap,
             listening = listening,
             hint = when {
                 listening -> "Escuchando…"

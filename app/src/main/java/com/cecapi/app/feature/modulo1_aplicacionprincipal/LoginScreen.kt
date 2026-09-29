@@ -68,6 +68,7 @@ import com.cecapi.app.core.ui.voiceHint
 fun LoginScreen(
     onLoginSuccess: () -> Unit,
     onNavigateToRegister: () -> Unit,
+    onBack: () -> Unit = {},
     viewModel: LoginViewModel = hiltViewModel(),
 ) {
     val context = LocalContext.current
@@ -83,6 +84,9 @@ fun LoginScreen(
     }
     LaunchedEffect(Unit) {
         viewModel.navigateToRegister.collect { onNavigateToRegister() }
+    }
+    LaunchedEffect(Unit) {
+        viewModel.back.collect { onBack() }
     }
 
     // Login stays alive under Register; only react to speech while it is actually showing.

@@ -39,6 +39,7 @@ fun CecapiNavGraph(navController: NavHostController = rememberNavController()) {
                     }
                 },
                 onNavigateToRegister = { navController.navigate(CecapiDestinations.REGISTER) },
+                onBack = { navController.popBackStack() },
             )
         }
         composable(CecapiDestinations.REGISTER) {

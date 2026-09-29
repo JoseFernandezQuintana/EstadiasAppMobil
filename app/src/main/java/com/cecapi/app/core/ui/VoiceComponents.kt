@@ -2,6 +2,7 @@ package com.cecapi.app.core.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -19,9 +20,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.cecapi.app.core.theme.CecapiAccent
@@ -41,14 +44,22 @@ fun VoiceMicButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     size: androidx.compose.ui.unit.Dp = 96.dp,
+    onDoubleTap: (() -> Unit)? = null,
 ) {
     Box(
         modifier = modifier
             .size(size)
             .clip(CircleShape)
             .background(CecapiSurfaceElevated)
-            .clickable(onClick = onClick)
-            .semantics { contentDescription = "Micrófono. Toca dos veces para hablar." },
+            // Two raw taps in a row silences the assistant, for direct touch (TalkBack's own double-tap
+            // stays the activation gesture, through the semantics onClick below).
+            .pointerInput(onDoubleTap) {
+                detectTapGestures(onTap = { onClick() }, onDoubleTap = { onDoubleTap?.invoke() })
+            }
+            .semantics {
+                contentDescription = "Micrófono. Toca dos veces para hablar."
+                onClick(label = "Hablar") { onClick(); true }
+            },
         contentAlignment = Alignment.Center,
     ) {
         Icon(

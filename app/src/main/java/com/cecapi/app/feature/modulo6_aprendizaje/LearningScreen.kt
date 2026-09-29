@@ -178,6 +178,7 @@ fun LearningScreen(
                 )
                 VoiceMicButton(
                     isListening = voiceState is VoiceState.Listening,
+                    onDoubleTap = viewModel::onMicDoubleTap,
                     onClick = {
                         val granted = ContextCompat.checkSelfPermission(
                             context, Manifest.permission.RECORD_AUDIO,

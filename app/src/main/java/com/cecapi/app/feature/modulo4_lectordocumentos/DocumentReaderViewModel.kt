@@ -36,6 +36,8 @@ data class DocumentReaderUiState(
     val parrafoActual: Int = 0,
     val estaLeyendo: Boolean = false,
     val capturaArmada: Boolean = false,
+    /** The photo being read, shown in its own area instead of the live camera feed while there is one. */
+    val photoPath: String? = null,
 )
 
 @HiltViewModel
@@ -206,6 +208,7 @@ class DocumentReaderViewModel @Inject constructor(
             errorMessage = null,
             estaLeyendo = false,
             capturaArmada = false,
+            photoPath = rutaImagen, // shown right away, in place of the live feed, while it processes
         )
         voiceEngine.speak("Procesando la imagen.")
         viewModelScope.launch {
@@ -215,6 +218,7 @@ class DocumentReaderViewModel @Inject constructor(
                         documentoId = outcome.documentoId,
                         recognizedText = outcome.textoCompleto,
                         parrafos = outcome.parrafos,
+                        photoPath = rutaImagen,
                     )
                     leerParrafo(0)
                     repository.logLectura(outcome.documentoId)

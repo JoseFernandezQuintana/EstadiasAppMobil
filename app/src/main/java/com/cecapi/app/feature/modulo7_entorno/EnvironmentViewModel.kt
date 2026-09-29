@@ -28,6 +28,8 @@ data class EnvironmentUiState(
     val isProcessing: Boolean = false,
     val descripcion: String? = null,
     val errorMessage: String? = null,
+    /** The photo being described, shown in its own area instead of the live camera feed while there is one. */
+    val photoPath: String? = null,
 )
 
 @HiltViewModel
@@ -170,12 +172,12 @@ class EnvironmentViewModel @Inject constructor(
             voiceEngine.speak(VoiceMessages.NEEDS_LOGIN)
             return
         }
-        _uiState.value = EnvironmentUiState(isProcessing = true)
+        _uiState.value = EnvironmentUiState(isProcessing = true, photoPath = rutaImagen)
         voiceEngine.speak("Analizando el entorno.")
         viewModelScope.launch {
             repository.processCapturedPhoto(usuario.id, imageUri, rutaImagen)
                 .onSuccess { result ->
-                    _uiState.value = EnvironmentUiState(descripcion = result.descripcion)
+                    _uiState.value = EnvironmentUiState(descripcion = result.descripcion, photoPath = rutaImagen)
                     voiceEngine.speak(result.descripcion)
                 }
                 .onFailure {

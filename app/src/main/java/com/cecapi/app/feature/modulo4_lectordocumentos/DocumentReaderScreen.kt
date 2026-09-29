@@ -43,6 +43,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.cecapi.app.core.theme.CecapiBackground
 import com.cecapi.app.core.ui.ScreenTopBar
 import com.cecapi.app.core.ui.CameraViewfinder
+import com.cecapi.app.core.ui.CapturedPhotoPreview
 import com.cecapi.app.core.ui.CaptureButton
 import com.cecapi.app.core.ui.FramingGuide
 import com.cecapi.app.core.ui.SuggestionChip
@@ -128,13 +129,20 @@ fun DocumentReaderScreen(
     val hayDocumento = uiState.parrafos.isNotEmpty()
 
     Box(modifier = Modifier.fillMaxSize()) {
-        CameraViewfinder(
-            hasPermission = hasCameraPermission,
-            onReady = { imageCapture = it },
-            modifier = Modifier.fillMaxSize(),
-        )
+        // Once there is a photo, it takes over this area — its own place to look at, separate from the
+        // live feed — instead of a live camera nobody is watching anymore while the text is being read.
+        val photoPath = uiState.photoPath
+        if (photoPath != null) {
+            CapturedPhotoPreview(path = photoPath, modifier = Modifier.fillMaxSize())
+        } else {
+            CameraViewfinder(
+                hasPermission = hasCameraPermission,
+                onReady = { imageCapture = it },
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
 
-        if (hasCameraPermission && !hayDocumento) {
+        if (hasCameraPermission && photoPath == null) {
             FramingGuide(
                 modifier = Modifier
                     .align(Alignment.Center)

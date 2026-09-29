@@ -8,6 +8,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -30,10 +31,12 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -49,7 +52,13 @@ import com.cecapi.app.core.theme.CecapiWarning
  * and on the signed-in dashboard so both feel the same.
  */
 @Composable
-fun MicPad(listening: Boolean, hint: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
+fun MicPad(
+    listening: Boolean,
+    hint: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    onDoubleTap: (() -> Unit)? = null,
+) {
     val pulse by rememberInfiniteTransition(label = "mic-pulse").animateFloat(
         initialValue = 1f,
         targetValue = 1.12f,
@@ -65,8 +74,16 @@ fun MicPad(listening: Boolean, hint: String, onClick: () -> Unit, modifier: Modi
             .clip(shape)
             .background(if (listening) CecapiAccent else CecapiSurfaceElevated)
             .border(3.dp, CecapiAccent, shape)
-            .clickable(onClick = onClick)
-            .semantics { contentDescription = "Micrófono. Toca dos veces para hablar con el asistente." }
+            // Two raw taps in a row silences the assistant, for someone navigating by touch instead of
+            // TalkBack (TalkBack's own double-tap is its activation gesture and keeps working through
+            // the semantics onClick below, unchanged).
+            .pointerInput(onDoubleTap) {
+                detectTapGestures(onTap = { onClick() }, onDoubleTap = { onDoubleTap?.invoke() })
+            }
+            .semantics {
+                contentDescription = "Micrófono. Toca dos veces para hablar con el asistente."
+                onClick(label = "Hablar") { onClick(); true }
+            }
             .voiceHint(
                 "Este es el micrófono. Tócalo para hablarme y dime lo que necesitas, " +
                     "por ejemplo: módulos disponibles, o estado del teléfono.",

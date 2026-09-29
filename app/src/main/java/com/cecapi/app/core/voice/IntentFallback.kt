@@ -45,10 +45,11 @@ class IntentFallback @Inject constructor() {
     /** The question to go deeper on if [spoken] is "dime más" / "explícame a fondo" and there is one; else null. */
     fun deepQuestionFor(spoken: String): String? {
         if (resolver == null) return null
-        val text = VoiceText.normalize(spoken)
-        val wantsMore = DEEP_PHRASES.let { phrases -> VoiceText.hasAny(text, phrases) }
-        return if (wantsMore) lastQuestion else null
+        return if (wantsMore(spoken)) lastQuestion else null
     }
+
+    /** "dime más", "explícame a fondo"... shared with other short-answer sources, like the Wikipedia lookup. */
+    fun wantsMore(spoken: String): Boolean = VoiceText.hasAny(VoiceText.normalize(spoken), DEEP_PHRASES)
 
     private companion object {
         val DEEP_PHRASES = listOf(

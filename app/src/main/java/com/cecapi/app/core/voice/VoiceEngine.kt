@@ -308,7 +308,8 @@ class VoiceEngine @Inject constructor(
         return true
     }
 
-    private fun mute() {
+    /** Same as saying "silencio": stays quiet until "hola". Also called from a double tap on the mic, for hands-only use. */
+    fun mute() {
         _mode.value = AssistantMode.MUTED
         silenceSpeech()
         cues.play(FeedbackCues.Cue.NAVIGATE)

@@ -8,6 +8,7 @@ import com.cecapi.app.core.ui.MenuItem
 import com.cecapi.app.core.util.ConnectivityObserver
 import com.cecapi.app.core.util.PhoneStatusReader
 import com.cecapi.app.core.util.VolumeControl
+import com.cecapi.app.core.util.WikipediaLookup
 import com.cecapi.app.core.voice.VoiceMessages
 import com.cecapi.app.core.voice.VoiceText
 import com.cecapi.app.core.voice.AssistantPreferences
@@ -54,6 +55,7 @@ class HomeViewModel @Inject constructor(
     private val deviceSettings: DeviceSettings,
     private val sessionRepository: SessionRepository,
     private val connectivityObserver: ConnectivityObserver,
+    private val wikipediaLookup: WikipediaLookup,
 ) : ViewModel() {
 
     val voiceState: StateFlow<VoiceState> = voiceEngine.state.stateIn(
@@ -171,6 +173,9 @@ class HomeViewModel @Inject constructor(
         if (enabled) wakeWordController.acquire() else wakeWordController.release()
     }
 
+    /** Two quick taps on the mic silence the assistant, for someone using touch with their hands instead of voice. */
+    fun onMicDoubleTap() = voiceEngine.mute()
+
     fun onMicTapped() {
         voiceEngine.startListening()
     }
@@ -228,10 +233,17 @@ class HomeViewModel @Inject constructor(
     }
 
     private fun runCommand(text: String, allowFallback: Boolean = true) {
-        // "dime más": go deeper on the last thing the AI answered.
+        // "dime más": go deeper on the last thing the AI answered, or read the rest of a Wikipedia summary.
         intentFallback.deepQuestionFor(text)?.let { question ->
             askAi(question, deep = true)
             return
+        }
+        pendingWikiRest?.let { rest ->
+            if (intentFallback.wantsMore(text)) {
+                pendingWikiRest = null
+                voiceEngine.speak(rest, listenAfter = true)
+                return
+            }
         }
         val newName = NAME_COMMAND.find(text)?.groupValues?.get(1)?.trim { !it.isLetterOrDigit() }
         val phoneStatus = phoneStatusReader.answer(text)
@@ -275,10 +287,38 @@ class HomeViewModel @Inject constructor(
      * internet, it gets one chance to turn the phrase into a command we know; otherwise we say so.
      */
     private fun notUnderstood(text: String, allowFallback: Boolean) {
-        if (allowFallback && intentFallback.resolver != null && isOnline.value) {
-            askAi(text, deep = false)
-        } else {
-            sayNotUnderstood()
+        val wikiQuery = wikiQuery(text)
+        when {
+            allowFallback && intentFallback.resolver != null && isOnline.value -> askAi(text, deep = false)
+            // The AI is off (its providers do not allow minors) or not connected yet: Wikipedia still helps
+            // with a plain "qué es / quién fue / busca..." when there is internet, without needing an account.
+            allowFallback && wikiQuery != null && isOnline.value -> askWikipedia(wikiQuery)
+            else -> sayNotUnderstood()
+        }
+    }
+
+    /** The part after "qué es", "quién fue", "busca"... in the words the person actually said (accents kept). */
+    private fun wikiQuery(text: String): String? {
+        val match = WIKI_TRIGGER.find(VoiceText.fold(text)) ?: return null
+        return text.substring(match.groups[1]!!.range.first).trim().takeIf { it.length >= 2 }
+    }
+
+    /** What to say after the current Wikipedia summary if the person says "dime más". */
+    private var pendingWikiRest: String? = null
+
+    private fun askWikipedia(query: String) {
+        voiceEngine.speak("Buscando en Wikipedia.")
+        viewModelScope.launch {
+            val result = runCatching { wikipediaLookup.search(query) }.getOrNull()
+            if (result == null) {
+                voiceEngine.speak("No encontré nada en Wikipedia sobre eso.")
+            } else {
+                pendingWikiRest = result.rest
+                voiceEngine.speak(
+                    result.short + if (result.rest != null) " Si quieres saber más, di dime más." else "",
+                    listenAfter = true,
+                )
+            }
         }
     }
 
@@ -341,6 +381,13 @@ class HomeViewModel @Inject constructor(
 
         const val EXIT_CONFIRM_WINDOW_MS = 30_000L
         val EXIT_CONFIRM_WORDS = setOf("si", "cerrar", "cierra", "confirmo", "hazlo", "correcto")
+
+        // Matched against VoiceText.fold(text) — accents stripped, same length as the original — so the
+        // captured group's range lines up with the words the person actually said, accents and all.
+        val WIKI_TRIGGER = Regex(
+            "(?:busca(?:r)? en wikipedia|busca(?:r)?|informacion sobre|dime sobre|" +
+                "que es|quien es|quien fue|wikipedia)\\s+(.+)",
+        )
 
         // "llámate Luna", "quisiera llamarte Luna", "quiero que te llames Luna", "te llamas Luna",
         // "te voy a llamar Luna", "tu nombre será Luna", "te pongo Luna", "ponte de nombre Luna"

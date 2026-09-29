@@ -2,6 +2,7 @@ package com.cecapi.app.feature.modulo1_aplicacionprincipal
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.cecapi.app.core.util.PasswordHasher
 import com.cecapi.app.core.util.StorageReport
 import com.cecapi.app.core.util.StorageUsage
 import com.cecapi.app.core.util.VolumeControl
@@ -62,7 +63,11 @@ class SettingsViewModel @Inject constructor(
     /** True while the person has been asked whether to delete the old photos and has not answered. */
     private val _pendingClean = MutableStateFlow(false)
 
-    /** True while the person has been asked to confirm deleting their account, for a short time only. */
+    /** True while the person has been asked to say their password to confirm deleting their account. */
+    private val _awaitingDeletePassword = MutableStateFlow(false)
+    val awaitingDeletePassword: StateFlow<Boolean> = _awaitingDeletePassword.asStateFlow()
+
+    /** True while, password already confirmed, the person has been asked the final "¿borro...?", for a short time only. */
     private val _pendingDeleteAccount = MutableStateFlow(false)
     val pendingDeleteAccount: StateFlow<Boolean> = _pendingDeleteAccount.asStateFlow()
     private var deleteAskedAt = 0L
@@ -97,8 +102,19 @@ class SettingsViewModel @Inject constructor(
         val spokenWords = text.split(" ")
         fun hasWord(vararg words: String) = words.any { it in spokenWords }
         val cleaning = _pendingClean.value
-        val deletingAccount = _pendingDeleteAccount.value && System.currentTimeMillis() - deleteAskedAt < CONFIRM_WINDOW_MS
+        val expired = System.currentTimeMillis() - deleteAskedAt >= CONFIRM_WINDOW_MS
+        val awaitingPassword = _awaitingDeletePassword.value && !expired
+        val deletingAccount = _pendingDeleteAccount.value && !expired
+        // The password step opens rawInput so a spoken password is never swallowed by another command; if the
+        // person went quiet instead of answering, put the screen back to normal instead of leaving it stuck.
+        if (_awaitingDeletePassword.value && expired) {
+            _awaitingDeletePassword.value = false
+            voiceEngine.rawInput = false
+        }
         when {
+            // Borrar la cuenta pide, además del "sí", la contraseña: mientras se espera, cualquier frase es el
+            // intento, no un comando (igual que el usuario y la contraseña al iniciar sesión).
+            awaitingPassword -> checkDeletePassword(spoken)
             CommandCatalog.isRequest(spoken) -> voiceEngine.speak(CommandCatalog.SETTINGS, listenAfter = true)
             deletingAccount && !VoiceText.isNo(spoken) && spokenWords.any { it in DELETE_CONFIRM_WORDS } -> confirmDeleteAccount()
             deletingAccount && VoiceText.isNo(spoken) -> cancelDeleteAccount()
@@ -198,15 +214,40 @@ class SettingsViewModel @Inject constructor(
     // ---- Privacy: delete my account, and the AI switch ------------------------------------------------------
 
     /** Asks first, in plain words about what is lost: this cannot be undone. Needs a signed-in person. */
+    /**
+     * Deleting an account cannot be undone, so it asks for one more thing than a plain "sí": the person's own
+     * password. This also stops a stray "sí, borrar" from someone else in the room from deleting an account.
+     */
     fun askDeleteAccount() {
         if (currentUser.value == null) {
-            voiceEngine.speak("No hay una sesión iniciada, así que no hay una cuenta que borrar.", listenAfter = true)
+            voiceEngine.speak("No hay una sesión iniciada, así que no hay una cuenta que borrar. Ve a iniciar sesión primero.", listenAfter = true)
+            return
+        }
+        _awaitingDeletePassword.value = true
+        deleteAskedAt = System.currentTimeMillis()
+        voiceEngine.rawInput = true // a spoken password must reach here untouched, like at login
+        voiceEngine.speak("Para borrar tu cuenta, primero dime tu contraseña.", listenAfter = true)
+    }
+
+    /** For the on-screen password field, when the person types instead of speaking it. */
+    fun onDeletePasswordEntered(password: String) {
+        if (password.isBlank()) return
+        checkDeletePassword(password)
+    }
+
+    private fun checkDeletePassword(spoken: String) {
+        val user = currentUser.value
+        _awaitingDeletePassword.value = false
+        if (user == null || PasswordHasher.hash(spoken.trim()) != user.contrasenaHash) {
+            voiceEngine.rawInput = false
+            cues.play(FeedbackCues.Cue.ERROR)
+            voiceEngine.speak("Esa no es tu contraseña. No borré nada.", listenAfter = true)
             return
         }
         _pendingDeleteAccount.value = true
         deleteAskedAt = System.currentTimeMillis()
         voiceEngine.speak(
-            "¿Borro tu cuenta y todo lo que guardaste: chats, resultados, documentos y fotos? " +
+            "Contraseña correcta. ¿Borro tu cuenta y todo lo que guardaste: chats, resultados, documentos y fotos? " +
                 "No se puede deshacer. Di sí, borrar, para confirmar, o no.",
             listenAfter = true,
         )
@@ -214,10 +255,15 @@ class SettingsViewModel @Inject constructor(
 
     fun confirmDeleteAccount() {
         _pendingDeleteAccount.value = false
+        voiceEngine.rawInput = false
         viewModelScope.launch {
             if (sessionRepository.deleteCurrentAccount()) {
                 cues.play(FeedbackCues.Cue.SUCCESS)
-                voiceEngine.speak("Listo. Borré tu cuenta y todos tus datos.")
+                voiceEngine.speak(
+                    "Listo. Borré los datos de tu cuenta: tus chats, resultados, documentos y fotos. " +
+                        "Algunas preferencias de este teléfono, como el nombre con el que te saludo y cómo hablo, se quedan, " +
+                        "porque son de este teléfono y no de tu cuenta.",
+                )
                 _loggedOut.tryEmit(Unit)
             } else {
                 voiceEngine.speak("No pude borrar la cuenta porque no hay una sesión iniciada.")
@@ -227,6 +273,8 @@ class SettingsViewModel @Inject constructor(
 
     fun cancelDeleteAccount() {
         _pendingDeleteAccount.value = false
+        _awaitingDeletePassword.value = false
+        voiceEngine.rawInput = false
         voiceEngine.speak("De acuerdo, no borré nada.", listenAfter = true)
     }
 
@@ -297,5 +345,10 @@ class SettingsViewModel @Inject constructor(
         cues.play(FeedbackCues.Cue.NAVIGATE)
         sessionRepository.logout()
         _loggedOut.tryEmit(Unit)
+    }
+
+    override fun onCleared() {
+        voiceEngine.rawInput = false
+        super.onCleared()
     }
 }

@@ -145,6 +145,7 @@ fun HomeScreen(
         // The microphone is the main control of the whole app, so it takes over most of the screen:
         // a huge target is easy to find by touch without seeing anything.
         MicPad(
+            onDoubleTap = viewModel::onMicDoubleTap,
             listening = listening,
             hint = when {
                 listening -> "Escuchando…"

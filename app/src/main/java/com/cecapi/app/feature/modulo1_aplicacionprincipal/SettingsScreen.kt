@@ -6,6 +6,8 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -18,12 +20,20 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -40,6 +50,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
@@ -75,6 +89,9 @@ fun SettingsScreen(
     val pendingClean by viewModel.pendingClean.collectAsState()
     val aiEnabled by viewModel.aiEnabled.collectAsState()
     val pendingDeleteAccount by viewModel.pendingDeleteAccount.collectAsState()
+    val awaitingDeletePassword by viewModel.awaitingDeletePassword.collectAsState()
+    var deletePassword by remember { mutableStateOf("") }
+    var deletePasswordVisible by remember { mutableStateOf(false) }
 
     var volume by remember { mutableFloatStateOf(viewModel.currentVolumePercent().toFloat()) }
 
@@ -274,7 +291,42 @@ fun SettingsScreen(
                 ) {
                     Text("Cerrar sesión", style = MaterialTheme.typography.titleMedium)
                 }
-                if (pendingDeleteAccount) {
+                if (awaitingDeletePassword) {
+                    NoticeBanner("Para borrar tu cuenta, dime o escribe tu contraseña.")
+                    OutlinedTextField(
+                        value = deletePassword,
+                        onValueChange = { deletePassword = it },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 64.dp)
+                            .voiceHint("Campo de contraseña, para confirmar que quieres borrar tu cuenta. Se ve oculta por seguridad."),
+                        placeholder = { Text("Tu contraseña") },
+                        leadingIcon = { Icon(Icons.Filled.Lock, contentDescription = null) },
+                        trailingIcon = {
+                            IconButton(onClick = { deletePasswordVisible = !deletePasswordVisible }) {
+                                Icon(
+                                    imageVector = if (deletePasswordVisible) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
+                                    contentDescription = if (deletePasswordVisible) "Ocultar contraseña" else "Mostrar contraseña",
+                                )
+                            }
+                        },
+                        singleLine = true,
+                        visualTransformation = if (deletePasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
+                        keyboardActions = KeyboardActions(onDone = {
+                            viewModel.onDeletePasswordEntered(deletePassword)
+                            deletePassword = ""
+                        }),
+                        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = CecapiAccent, unfocusedBorderColor = CecapiTextMuted),
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 8.dp)) {
+                        Button(
+                            onClick = { viewModel.onDeletePasswordEntered(deletePassword); deletePassword = "" },
+                            colors = ButtonDefaults.buttonColors(containerColor = CecapiError, contentColor = Color.White),
+                        ) { Text("Confirmar") }
+                        Button(onClick = { deletePassword = ""; viewModel.cancelDeleteAccount() }) { Text("Cancelar") }
+                    }
+                } else if (pendingDeleteAccount) {
                     NoticeBanner("¿Borrar tu cuenta y todo lo que guardaste? No se puede deshacer. Di sí, borrar, o no.")
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         SuggestionChip(label = "sí, borrar", onClick = viewModel::confirmDeleteAccount)
@@ -284,7 +336,7 @@ fun SettingsScreen(
                     ActionButton(
                         "Borrar mi cuenta y mis datos",
                         "Borrar mi cuenta y mis datos. Elimina tu cuenta y todo lo que guardaste: chats, resultados, documentos y fotos. " +
-                            "Te pido confirmación y no se puede deshacer. También puedes decir: borra mi cuenta.",
+                            "Te pido tu contraseña y luego confirmar; no se puede deshacer. También puedes decir: borra mi cuenta.",
                         viewModel::askDeleteAccount,
                     )
                 }

@@ -38,7 +38,8 @@ object CommandCatalog {
 
     const val LOGIN =
         "En el inicio de sesión puedes decir: usuario, y luego tu usuario. Contraseña, y luego tu contraseña. " +
-            "También todo junto: usuario pepe, contraseña 1234. Ingresar. Crear cuenta. Cancelar, para corregir. " + MORE
+            "También todo junto: usuario pepe, contraseña 1234. Ingresar. Crear cuenta. Cancelar, para corregir. " +
+            "Olvidé mi contraseña, si no la recuerdas. Atrás, para volver al inicio. " + MORE
 
     const val REGISTER =
         "Al crear tu cuenta di primero tu nombre completo, luego el usuario que quieres y luego la contraseña. " +

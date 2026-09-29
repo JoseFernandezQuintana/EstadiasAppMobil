@@ -198,6 +198,12 @@ class LearningViewModel @Inject constructor(
         level.value = newLevel
     }
 
+    /** Two quick taps on the mic silence the assistant, for someone using touch with their hands instead of voice. */
+    fun onMicDoubleTap() {
+        stopStimulus()
+        voiceEngine.mute()
+    }
+
     fun onMicTapped() {
         stopStimulus()
         voiceEngine.startListening()

@@ -94,6 +94,7 @@ fun RegisterScreen(
         Box(modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp)) {
             VoiceMicButton(
                 isListening = voiceState is VoiceState.Listening,
+                onDoubleTap = viewModel::onMicDoubleTap,
                 onClick = {
                     val granted = ContextCompat.checkSelfPermission(
                         context, Manifest.permission.RECORD_AUDIO,

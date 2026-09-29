@@ -110,7 +110,7 @@ object CommandAlternatives {
                 "Caché: limpia la caché, borra la caché, vacía la caché, libera la caché o borra los archivos temporales. " +
                 "Inteligencia artificial: activa la inteligencia artificial o desactívala; empieza apagada. " +
                 "Cuenta: cerrar sesión, cierra mi sesión o salir de la cuenta. " +
-                "Borrar todo: borra mi cuenta, elimina mi cuenta, borra mis datos o darme de baja; siempre pide confirmar con sí, borrar.",
+                "Borrar todo: borra mi cuenta, elimina mi cuenta, borra mis datos o darme de baja; pide tu contraseña y luego confirmar con sí, borrar.",
         ),
         Area(
             key = "session",
@@ -119,6 +119,8 @@ object CommandAlternatives {
             text = "Sesión. Iniciar: iniciar sesión, o di usuario y tu usuario, contraseña y tu contraseña, o todo junto. " +
                 "Crear cuenta: crear cuenta, registrarme, registrar o nueva cuenta. " +
                 "Corregir: cancelar. Repetir la pregunta: repite o ayuda. " +
+                "Olvidé mi contraseña, o no recuerdo mi contraseña: te digo que hoy no hay recuperación automática. " +
+                "Salir del inicio de sesión sin entrar: atrás, volver o salir. " +
                 "Cerrar sesión: cerrar sesión, cierra mi sesión, terminar sesión, salir de mi cuenta o salir de la cuenta. " +
                 "Cerrar la aplicación: cerrar la aplicación, cierra la app, salir de la aplicación, salir de aquí o cerrar todo.",
         ),
@@ -150,6 +152,8 @@ object CommandAlternatives {
             text = "Comandos generales. Estado: estado del teléfono, cómo está mi teléfono o estado del celular. " +
                 "Batería: batería, pila o cuánta carga. Red: wifi, internet, señal, cobertura o datos móviles. " +
                 "Hora, fecha, qué día es, año o mes. " +
+                "Buscar información, cuando algo no lo entienda: qué es, quién es, quién fue, busca, o busca en Wikipedia, " +
+                "y el tema; necesita internet. " +
                 "Volumen: sube el volumen, más volumen, más fuerte o aumenta el volumen; baja el volumen, menos volumen o más bajo; " +
                 "volumen al máximo o mínimo; y cuánto volumen. " +
                 "Más detalle: dime más, cuéntame más, explícame más, a fondo, en detalle, profundiza o investiga. " +
