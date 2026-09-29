@@ -67,6 +67,9 @@ fun MicPad(
     )
     val shape = RoundedCornerShape(36.dp)
     val padHeight = LocalConfiguration.current.screenHeightDp.dp * 0.5f
+    val helper = LocalVoiceHelp.current
+    val holdHelp = "Este es el micrófono. Tócalo una vez para hablarme y dime lo que necesitas, " +
+        "por ejemplo: módulos disponibles, o estado del teléfono. Tócalo dos veces seguidas para que se calle."
     Box(
         modifier = modifier
             .fillMaxWidth()
@@ -74,20 +77,22 @@ fun MicPad(
             .clip(shape)
             .background(if (listening) CecapiAccent else CecapiSurfaceElevated)
             .border(3.dp, CecapiAccent, shape)
-            // Two raw taps in a row silences the assistant, for someone navigating by touch instead of
-            // TalkBack (TalkBack's own double-tap is its activation gesture and keeps working through
-            // the semantics onClick below, unchanged).
-            .pointerInput(onDoubleTap) {
-                detectTapGestures(onTap = { onClick() }, onDoubleTap = { onDoubleTap?.invoke() })
+            // One gesture detector for the three touch behaviors, so they can never overlap: a single tap
+            // interacts (opens the mic), two taps in a row silences the assistant (for someone navigating by
+            // touch instead of TalkBack — TalkBack's own double-tap stays the activation gesture, through the
+            // semantics onClick below, unchanged), and holding down only speaks what the control does, without
+            // also counting as a tap or a double tap once the finger lifts.
+            .pointerInput(onDoubleTap, holdHelp) {
+                detectTapGestures(
+                    onTap = { onClick() },
+                    onDoubleTap = { onDoubleTap?.invoke() },
+                    onLongPress = { helper?.speak(holdHelp) },
+                )
             }
             .semantics {
                 contentDescription = "Micrófono. Toca dos veces para hablar con el asistente."
                 onClick(label = "Hablar") { onClick(); true }
-            }
-            .voiceHint(
-                "Este es el micrófono. Tócalo para hablarme y dime lo que necesitas, " +
-                    "por ejemplo: módulos disponibles, o estado del teléfono.",
-            ),
+            },
         contentAlignment = Alignment.Center,
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {

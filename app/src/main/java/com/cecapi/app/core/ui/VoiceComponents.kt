@@ -46,15 +46,23 @@ fun VoiceMicButton(
     size: androidx.compose.ui.unit.Dp = 96.dp,
     onDoubleTap: (() -> Unit)? = null,
 ) {
+    val helper = LocalVoiceHelp.current
+    val holdHelp = "Micrófono. Tócalo una vez para hablar. Tócalo dos veces seguidas para que se calle."
     Box(
         modifier = modifier
             .size(size)
             .clip(CircleShape)
             .background(CecapiSurfaceElevated)
-            // Two raw taps in a row silences the assistant, for direct touch (TalkBack's own double-tap
-            // stays the activation gesture, through the semantics onClick below).
-            .pointerInput(onDoubleTap) {
-                detectTapGestures(onTap = { onClick() }, onDoubleTap = { onDoubleTap?.invoke() })
+            // One gesture detector for the three touch behaviors, so they can never overlap: a single tap
+            // interacts, two taps in a row silences the assistant (TalkBack's own double-tap stays the
+            // activation gesture, through the semantics onClick below), and holding down only speaks what
+            // the control does, without also counting as a tap or a double tap once the finger lifts.
+            .pointerInput(onDoubleTap, holdHelp) {
+                detectTapGestures(
+                    onTap = { onClick() },
+                    onDoubleTap = { onDoubleTap?.invoke() },
+                    onLongPress = { helper?.speak(holdHelp) },
+                )
             }
             .semantics {
                 contentDescription = "Micrófono. Toca dos veces para hablar."

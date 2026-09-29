@@ -21,6 +21,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Person
@@ -122,6 +123,18 @@ fun LoginScreen(
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 24.dp, vertical = 32.dp),
     ) {
+        // Visible way back for someone navigating by touch, not only by voice ("atrás").
+        val backHelp = "Volver. Regresa a la pantalla anterior."
+        IconButton(
+            onClick = onBack,
+            modifier = Modifier
+                .size(48.dp)
+                .semantics { contentDescription = backHelp }
+                .voiceHint(backHelp),
+        ) {
+            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null, tint = CecapiAccent)
+        }
+
         Text(
             text = "Di \"usuario\" o \"contraseña\" para dictar cada dato, o escríbelos abajo",
             style = MaterialTheme.typography.bodyLarge,

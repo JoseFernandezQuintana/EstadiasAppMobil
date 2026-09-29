@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Badge
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Person
@@ -40,6 +41,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -83,6 +86,18 @@ fun RegisterScreen(
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 24.dp, vertical = 32.dp),
     ) {
+        // Visible way back for someone navigating by touch, not only by voice ("atrás").
+        val backHelp = "Volver. Regresa a la pantalla anterior."
+        IconButton(
+            onClick = onBack,
+            modifier = Modifier
+                .size(48.dp)
+                .semantics { contentDescription = backHelp }
+                .voiceHint(backHelp),
+        ) {
+            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null, tint = CecapiAccent)
+        }
+
         Text("CREAR CUENTA", style = CecapiEyebrowStyle, color = CecapiTextMuted)
         Text(
             "Crea tu cuenta",
