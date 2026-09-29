@@ -16,12 +16,14 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Replay
@@ -48,7 +50,6 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview as ComposePreview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -58,7 +59,6 @@ import com.cecapi.app.core.theme.CecapiAccent
 import com.cecapi.app.core.theme.CecapiBackground
 import com.cecapi.app.core.theme.CecapiBorder
 import com.cecapi.app.core.theme.CecapiSurfaceElevated
-import com.cecapi.app.core.theme.CecapiTextMuted
 import com.cecapi.app.core.theme.CecapiTextPrimary
 import com.cecapi.app.core.theme.ModuleCameraAccent
 import com.cecapi.app.core.theme.ModuleLearningAccent
@@ -119,11 +119,10 @@ fun DocumentReaderScreen(
     val hayDocumento = uiState.parrafos.isNotEmpty()
 
     if (hayDocumento && !uiState.isProcessing) {
-        // Pantalla 2: Interfaz futurista CECAPI de control de lectura con botones grandes de alto contraste
+        // Pantalla 2: Interfaz futurista CECAPI de control de lectura con botón VOLVER AL MENÚ arriba de todo
         DocumentReadoutControlScreen(
             uiState = uiState,
             onBack = onBack,
-            onCommands = viewModel::onCommandsRequested,
             onPause = viewModel::pausarLectura,
             onResume = viewModel::continuarLectura,
             onRepeat = viewModel::repetirLectura,
@@ -212,13 +211,13 @@ private fun DocumentCameraScreen(
 }
 
 /**
- * Pantalla 2: Interfaz futurista CECAPI de lectura con tarjetas/botones de alto contraste y esquinas redondeadas.
+ * Pantalla 2: Interfaz futurista CECAPI de lectura. El botón VOLVER AL MENÚ PRINCIPAL está directamente
+ * sobre el botón de PAUSAR LECTURA en un tamaño GIGANTE.
  */
 @Composable
 private fun DocumentReadoutControlScreen(
     uiState: DocumentReaderUiState,
     onBack: () -> Unit,
-    onCommands: () -> Unit,
     onPause: () -> Unit,
     onResume: () -> Unit,
     onRepeat: () -> Unit,
@@ -226,9 +225,6 @@ private fun DocumentReadoutControlScreen(
     onNext: () -> Unit,
     onRetakePhoto: () -> Unit,
 ) {
-    val currentParagraphText = "Párrafo ${uiState.parrafoActual + 1} de ${uiState.parrafos.size}: " +
-        (uiState.parrafos.getOrNull(uiState.parrafoActual) ?: "")
-
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -236,17 +232,51 @@ private fun DocumentReadoutControlScreen(
             .padding(14.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        ScreenTopBar(
-            eyebrow = "LECTOR",
-            title = "Documento leído",
-            onBack = onBack,
-            onCommands = onCommands,
-        )
-
-        // Subtítulo con el texto del párrafo actual
-        VoiceCaptionBubble(
-            text = if (uiState.estaLeyendo) currentParagraphText else "Lectura en pausa. Toca Reanudar o di continúa.",
-        )
+        // Botón Superior Principal: VOLVER AL MENÚ PRINCIPAL (Tamaño GIGANTE de 82.dp)
+        val menuTint = Color(0xFFEF4444)
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(82.dp)
+                .clip(RoundedCornerShape(24.dp))
+                .background(CecapiSurfaceElevated)
+                .border(2.5.dp, menuTint, RoundedCornerShape(24.dp))
+                .semantics {
+                    role = Role.Button
+                    contentDescription = "Volver al menú principal"
+                }
+                .clickable { onBack() },
+            contentAlignment = Alignment.Center,
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center,
+                modifier = Modifier.padding(horizontal = 16.dp),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(52.dp)
+                        .clip(CircleShape)
+                        .background(menuTint.copy(alpha = 0.2f))
+                        .border(2.dp, menuTint, CircleShape),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Home,
+                        contentDescription = null,
+                        tint = menuTint,
+                        modifier = Modifier.size(30.dp),
+                    )
+                }
+                Spacer(modifier = Modifier.size(14.dp))
+                Text(
+                    text = "VOLVER AL MENÚ PRINCIPAL",
+                    fontSize = 21.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = CecapiTextPrimary,
+                )
+            }
+        }
 
         // Tarjeta 1 Futurista: PAUSAR / REANUDAR
         val pauseTint = CecapiAccent
@@ -479,7 +509,6 @@ private fun DocumentReadoutControlScreenPreview() {
                 estaLeyendo = true,
             ),
             onBack = {},
-            onCommands = {},
             onPause = {},
             onResume = {},
             onRepeat = {},
