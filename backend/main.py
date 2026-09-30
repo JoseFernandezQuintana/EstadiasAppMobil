@@ -1,28 +1,54 @@
-import os
-import google.generativeai as genai
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
+"""Backend del asistente inteligente de CECAPI (Módulo 3). Ver README.md."""
 
-# Configura Gemini con la API key del entorno
-genai.configure(api_key=os.environ["GEMINI_API_KEY"])
-model = genai.GenerativeModel("gemini-2.0-flash")
+import logging
 
-app = FastAPI()
+from dotenv import load_dotenv
+
+# Carga el .env ANTES de importar proveedores, que leen las claves al crearse.
+load_dotenv()
+
+from fastapi import FastAPI, HTTPException  # noqa: E402
+from pydantic import BaseModel, Field  # noqa: E402
+
+import proveedores  # noqa: E402
+import uso  # noqa: E402
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+log = logging.getLogger("cecapi")
+
+if not proveedores.configurados():
+    raise SystemExit(
+        "No hay ninguna clave de IA. Crea backend/.env con GEMINI_API_KEY y/o GROQ_API_KEY "
+        "(copia .env.example)."
+    )
+log.info("Proveedores activos, en orden: %s", [p.nombre for p in proveedores.configurados()])
+
+app = FastAPI(title="CECAPI backend")
+
 
 class Pregunta(BaseModel):
-    pregunta: str
+    pregunta: str = Field(min_length=1, max_length=2000)
     contexto: list[str] = []
+
 
 @app.get("/")
 def raiz():
-    return {"status": "CECAPI backend activo"}
+    return {"status": "CECAPI backend activo", "proveedores": [p.nombre for p in proveedores.configurados()]}
 
+
+@app.get("/uso")
+def ver_uso():
+    """Peticiones de hoy por proveedor; `aviso` se vuelve true al pasar el 80% del límite."""
+    return uso.resumen([p.nombre for p in proveedores.PROVEEDORES])
+
+
+# `def` y no `async def`: los SDK son bloqueantes y así FastAPI los corre en otro hilo
+# sin congelar al servidor mientras espera a la IA.
 @app.post("/preguntar")
-async def responder(body: Pregunta):
+def responder(body: Pregunta):
     try:
-        historial = "\n".join(body.contexto)
-        prompt = f"{historial}\nUsuario: {body.pregunta}" if historial else body.pregunta
-        respuesta = model.generate_content(prompt)
-        return {"respuesta": respuesta.text}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        respuesta, proveedor = proveedores.preguntar_con_respaldo(body.pregunta, body.contexto[-6:])
+    except proveedores.ProveedorNoDisponible:
+        # Mensaje genérico hacia la app; el detalle queda solo en el log del servidor.
+        raise HTTPException(status_code=503, detail="El asistente no está disponible en este momento.")
+    return {"respuesta": respuesta, "proveedor": proveedor}

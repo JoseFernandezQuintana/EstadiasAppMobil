@@ -20,3 +20,5 @@ captures/
 entorno_virtual/ 
 __pycache__/ 
 *.pyc 
+backend/uso_diario.json
+backend/uso_diario.tmp
