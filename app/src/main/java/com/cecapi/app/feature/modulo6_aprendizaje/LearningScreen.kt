@@ -38,6 +38,7 @@ import com.cecapi.app.core.voice.VoiceState
 
 @Composable
 fun LearningScreen(
+    onBack: () -> Unit = {},
     viewModel: LearningViewModel = hiltViewModel(),
 ) {
     val context = LocalContext.current
@@ -49,6 +50,16 @@ fun LearningScreen(
     ) { granted -> if (granted) viewModel.onMicTapped() }
 
     Column(modifier = Modifier.fillMaxSize().padding(24.dp)) {
+        Text(
+            "‹ Volver",
+            color = CecapiAccent,
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier
+                .clip(RoundedCornerShape(50))
+                .clickable(onClick = onBack)
+                .padding(bottom = 12.dp),
+        )
+
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -93,6 +104,17 @@ fun LearningScreen(
                 modifier = Modifier.padding(top = 24.dp),
             )
 
+            // Avisa mientras el sonido del ejercicio está sonando, para que el
+            // usuario sepa que debe esperar antes de tocar el micrófono.
+            if (uiState.reproduciendo) {
+                Text(
+                    "Reproduciendo sonido...",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = CecapiAccent,
+                    modifier = Modifier.padding(top = 12.dp),
+                )
+            }
+
             Box(modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp), contentAlignment = Alignment.Center) {
                 VoiceMicButton(
                     isListening = voiceState is VoiceState.Listening,
@@ -104,6 +126,17 @@ fun LearningScreen(
                     },
                 )
             }
+
+            // Botón para volver a escuchar el mismo sonido, sin repetir la instrucción.
+            Text(
+                "\"Repetir sonido\"",
+                color = CecapiAccent,
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(50))
+                    .clickable(onClick = viewModel::onRepetirSonido)
+                    .padding(top = 4.dp, bottom = 12.dp),
+            )
 
             uiState.feedback?.let { feedback ->
                 Text(

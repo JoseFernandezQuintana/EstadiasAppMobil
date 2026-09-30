@@ -11,11 +11,21 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 import java.text.Normalizer
+
+// =============================================================================
+// AVISO PARA EL EQUIPO: este archivo cambió respecto a la primera versión.
+// Ahora, además de hablar y escuchar, el ViewModel también manda a reproducir
+// el sonido espacial de cada ejercicio (a través de AudioSpatialPlayer), y solo
+// dice la instrucción en voz alta la PRIMERA vez que aparece un nivel nuevo,
+// no en cada ejercicio (así lo pide la tarea: "instrucción al iniciar cada
+// nivel", no en cada intento).
+// =============================================================================
 
 private fun normalizar(texto: String): String =
     Normalizer.normalize(texto.lowercase().trim(), Normalizer.Form.NFD)
@@ -26,6 +36,7 @@ data class LearningUiState(
     val indiceActual: Int = 0,
     val feedback: String? = null,
     val nivel: NivelAprendizajeEntity = NivelAprendizajeEntity(usuarioId = 0),
+    val reproduciendo: Boolean = false, // true mientras suena el audio del ejercicio
 ) {
     val ejercicioActual: EjercicioEntity? get() = ejercicios.getOrNull(indiceActual)
 }
@@ -35,6 +46,7 @@ class LearningViewModel @Inject constructor(
     private val voiceEngine: VoiceEngine,
     private val sessionRepository: SessionRepository,
     private val repository: LearningRepository,
+    private val audioPlayer: AudioSpatialPlayer,
 ) : ViewModel() {
 
     val voiceState: StateFlow<VoiceState> = voiceEngine.state.stateIn(
@@ -44,8 +56,15 @@ class LearningViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(LearningUiState())
     val uiState: StateFlow<LearningUiState> = _uiState.asStateFlow()
 
+    // Recuerda el último nivel cuya instrucción ya se dijo en voz alta, para no
+    // repetirla en cada ejercicio, solo cuando el usuario entra a un nivel nuevo.
+    private var ultimoNivelAnunciado = -1
+
     init {
-        voiceEngine.speak("Centro de aprendizaje. Toca el micrófono y responde cada ejercicio en voz alta.")
+        viewModelScope.launch {
+            repository.seedEjerciciosSiVacio()
+        }
+
         viewModelScope.launch {
             sessionRepository.currentUser.filterNotNull().flatMapLatest { usuario ->
                 repository.observeEjerciciosDelNivel(usuario.id)
@@ -65,12 +84,36 @@ class LearningViewModel @Inject constructor(
     }
 
     fun onMicTapped() {
+        if (_uiState.value.reproduciendo) return // no escuchar mientras suena el audio
         voiceEngine.startListening()
     }
 
+    /** Dice la instrucción SOLO si es un nivel nuevo, y siempre reproduce el sonido del ejercicio. */
     private fun anunciarEjercicioActual() {
-        _uiState.value.ejercicioActual?.let { ejercicio ->
-            voiceEngine.speak(ejercicio.instruccion)
+        val ejercicio = _uiState.value.ejercicioActual ?: return
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(reproduciendo = true)
+
+            val esNivelNuevo = ejercicio.nivel != ultimoNivelAnunciado
+            if (esNivelNuevo) {
+                voiceEngine.speak(ejercicio.instruccion)
+                voiceState.first { it !is VoiceState.Speaking } // espera a que termine de hablar
+                ultimoNivelAnunciado = ejercicio.nivel
+            }
+
+            audioPlayer.reproducir(ejercicio)
+            _uiState.value = _uiState.value.copy(reproduciendo = false)
+        }
+    }
+
+    /** Vuelve a reproducir el mismo sonido, sin repetir la instrucción hablada. */
+    fun onRepetirSonido() {
+        val ejercicio = _uiState.value.ejercicioActual ?: return
+        if (_uiState.value.reproduciendo) return
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(reproduciendo = true)
+            audioPlayer.reproducir(ejercicio)
+            _uiState.value = _uiState.value.copy(reproduciendo = false)
         }
     }
 
@@ -91,5 +134,10 @@ class LearningViewModel @Inject constructor(
         val siguiente = (state.indiceActual + 1) % state.ejercicios.size.coerceAtLeast(1)
         _uiState.value = state.copy(indiceActual = siguiente, feedback = null)
         anunciarEjercicioActual()
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        audioPlayer.detener() // por si sales de la pantalla mientras algo sonaba
     }
 }
