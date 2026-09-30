@@ -124,7 +124,9 @@ class VoiceEngine @Inject constructor(
                 // Nothing can be spoken at all: say so on screen and with a distinct double buzz.
                 Log.e(TAG, "TextToSpeech failed to start (status=$status)")
                 _state.value = VoiceState.Error(
-                    "La voz del teléfono no está disponible. Revisa que tenga un motor de voz instalado.",
+                    "La voz del teléfono no está disponible. Es posible que el teléfono no tenga elegido " +
+                        "un motor de voz, aunque esté instalado. Toca el botón de abajo para elegirlo.",
+                    openTtsSettings = true,
                 )
                 cues.play(FeedbackCues.Cue.ERROR)
             }

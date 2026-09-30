@@ -176,10 +176,19 @@ fun SuggestionChip(label: String, onClick: () -> Unit) {
     }
 }
 
-/** Something that needs the user's attention and is not repeated by voice on screen. */
+/**
+ * Something that needs the user's attention and is not repeated by voice on screen.
+ * An optional [actionLabel]/[onAction] adds a button below the text, for when there is
+ * somewhere concrete to send the person instead of only naming the problem.
+ */
 @Composable
-fun NoticeBanner(text: String, modifier: Modifier = Modifier) {
-    Box(
+fun NoticeBanner(
+    text: String,
+    modifier: Modifier = Modifier,
+    actionLabel: String? = null,
+    onAction: (() -> Unit)? = null,
+) {
+    Column(
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
@@ -188,6 +197,14 @@ fun NoticeBanner(text: String, modifier: Modifier = Modifier) {
             .semantics { liveRegion = LiveRegionMode.Polite },
     ) {
         Text(text = text, color = CecapiWarning, style = MaterialTheme.typography.bodyLarge)
+        if (actionLabel != null && onAction != null) {
+            androidx.compose.material3.TextButton(
+                onClick = onAction,
+                modifier = Modifier.padding(top = 4.dp).voiceHint("$actionLabel. $text"),
+            ) {
+                Text(actionLabel, color = CecapiAccent)
+            }
+        }
     }
 }
 
