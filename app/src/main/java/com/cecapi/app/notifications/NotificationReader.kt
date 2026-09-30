@@ -17,14 +17,14 @@ class NotificationReader @Inject constructor(
         val text = VoiceText.normalize(spoken)
         if ("notificacion" !in text && "notificaciones" !in text) return null
         return when {
-            listOf("activar", "activa", "dar acceso", "permiso", "habilitar").any { it in text } -> enableAccess()
+            listOf("activar", "activa", "dar acceso", "permiso", "habilitar").let { phrases -> VoiceText.hasAny(text, phrases) } -> enableAccess()
             !access.isEnabled() -> NEEDS_ACCESS
-            listOf("borra", "limpia", "limpiar", "elimina").any { it in text } -> {
+            listOf("borra", "limpia", "limpiar", "elimina").let { phrases -> VoiceText.hasAny(text, phrases) } -> {
                 inbox.clear()
                 "Listo, borré mi lista de notificaciones. Las de tu teléfono siguen ahí."
             }
             "todas" in text -> readAll()
-            listOf("ultima", "nueva", "siguiente", "lee", "leeme", "leer").any { it in text } -> readNext()
+            listOf("ultima", "nueva", "siguiente", "lee", "leeme", "leer").let { phrases -> VoiceText.hasAny(text, phrases) } -> readNext()
             else -> summary()
         }
     }

@@ -18,10 +18,25 @@
         android:name="android.hardware.microphone"
         android:required="false" />
 
+    <!--
+        Android 11+ hides installed apps from each other by default (package visibility). Without
+        declaring these two here, TextToSpeech and SpeechRecognizer silently fail to find ANY engine
+        on the phone — even one that is installed and working — and the app wrongly says "no hay un
+        motor de voz instalado". This is the whole fix; it is not specific to any IDE or emulator.
+    -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.TTS_SERVICE" />
+        </intent>
+        <intent>
+            <action android:name="android.speech.RecognitionService" />
+        </intent>
+    </queries>
+
     <application
         android:usesCleartextTraffic="true"
         android:name=".CecapiApplication"
-        android:allowBackup="true"
+        android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:supportsRtl="true"

@@ -6,6 +6,8 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -16,18 +18,22 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -44,6 +50,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
@@ -54,7 +64,9 @@ import com.cecapi.app.core.theme.CecapiEyebrowStyle
 import com.cecapi.app.core.theme.CecapiSurface
 import com.cecapi.app.core.theme.CecapiSurfaceElevated
 import com.cecapi.app.core.theme.CecapiTextMuted
+import com.cecapi.app.core.ui.NoticeBanner
 import com.cecapi.app.core.ui.ScreenTopBar
+import com.cecapi.app.core.ui.SuggestionChip
 import com.cecapi.app.core.ui.voiceHint
 import kotlin.math.roundToInt
 
@@ -73,6 +85,13 @@ fun SettingsScreen(
     val announceNotifications by viewModel.announceNotifications.collectAsState()
     val listenOutsideApp by viewModel.listenOutsideApp.collectAsState()
     val user by viewModel.currentUser.collectAsState()
+    val storage by viewModel.storage.collectAsState()
+    val pendingClean by viewModel.pendingClean.collectAsState()
+    val aiEnabled by viewModel.aiEnabled.collectAsState()
+    val pendingDeleteAccount by viewModel.pendingDeleteAccount.collectAsState()
+    val awaitingDeletePassword by viewModel.awaitingDeletePassword.collectAsState()
+    var deletePassword by remember { mutableStateOf("") }
+    var deletePasswordVisible by remember { mutableStateOf(false) }
 
     var volume by remember { mutableFloatStateOf(viewModel.currentVolumePercent().toFloat()) }
 
@@ -167,6 +186,53 @@ fun SettingsScreen(
             )
         }
 
+        Section("ALMACENAMIENTO", "Cuánto espacio queda en el teléfono y cuánto ocupa la aplicación") {
+            val usage = storage
+            if (usage == null) {
+                Text("Calculando…", style = MaterialTheme.typography.bodyMedium, color = CecapiTextMuted)
+            } else {
+                if (usage.lowSpace) NoticeBanner("Queda poco espacio en el teléfono. Conviene liberar espacio.")
+                Text(
+                    text = viewModel.describeStorage(usage),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onBackground,
+                )
+                if (usage.oldPhotoCount > 0) {
+                    Text(
+                        "${usage.oldPhotoCount} fotos tienen más de un mes y se pueden borrar.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = CecapiTextMuted,
+                    )
+                }
+            }
+            if (pendingClean) {
+                NoticeBanner("¿Borrar las fotos de más de un mes? Di sí o no.")
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    SuggestionChip(label = "sí", onClick = viewModel::confirmClean)
+                    SuggestionChip(label = "no", onClick = viewModel::cancelClean)
+                }
+            } else {
+                ActionButton(
+                    "Liberar espacio",
+                    "Liberar espacio. Borra las fotos que la aplicación guardó hace más de un mes. " +
+                        "Te pido confirmación antes de borrar y el texto que leí sigue guardado. También puedes decir: libera espacio.",
+                    viewModel::askClean,
+                )
+                ActionButton(
+                    "Vaciar memoria temporal",
+                    "Vaciar memoria temporal. Borra archivos temporales que la aplicación y sus librerías guardan para ir más rápido. " +
+                        "No borra tus chats ni nada que hayas hecho. También puedes decir: limpia la caché.",
+                    viewModel::clearCache,
+                )
+                ActionButton(
+                    "Escuchar el reporte",
+                    "Escuchar el reporte. Te digo cuánto espacio libre queda y cuánto ocupa la aplicación. " +
+                        "También puedes decir: cuánto espacio tengo.",
+                    viewModel::speakStorage,
+                )
+            }
+        }
+
         Section("ESCUCHAR FUERA DE LA APLICACIÓN", "Seguir atento a \"hola\" aunque cierres la aplicación") {
             SwitchRow(
                 label = "Escuchar fuera de la aplicación",
@@ -176,6 +242,20 @@ fun SettingsScreen(
                 help = "Escuchar fuera de la aplicación. Sigo atento a la palabra hola o a mi nombre aunque cierres " +
                     "la aplicación. Mientras tanto verás un aviso fijo, y puedes detenerme diciendo para. " +
                     "Gasta más batería.",
+            )
+        }
+
+        Section("PRIVACIDAD", "Qué sale de tu teléfono: por defecto, nada") {
+            SwitchRow(
+                label = "Inteligencia artificial en internet",
+                description = "Todavía no está conectada. No la actives si quien usa la aplicación es menor de edad",
+                checked = aiEnabled,
+                onChange = viewModel::onAiEnabledChanged,
+                help = "Inteligencia artificial en internet. Apagada, ninguna de tus preguntas se envía a un servidor para interpretarla. " +
+                    "Encendida, cuando no entienda una frase y haya internet, podrá enviarla a un servidor para interpretarla. " +
+                    "Esto no cambia el reconocimiento de voz del teléfono, que sigue funcionando igual. " +
+                    "Los proveedores de inteligencia artificial no permiten su uso con menores de edad. " +
+                    "También puedes decir: activa la inteligencia artificial, o desactívala.",
             )
         }
 
@@ -210,6 +290,55 @@ fun SettingsScreen(
                     colors = ButtonDefaults.buttonColors(containerColor = CecapiError, contentColor = Color.White),
                 ) {
                     Text("Cerrar sesión", style = MaterialTheme.typography.titleMedium)
+                }
+                if (awaitingDeletePassword) {
+                    NoticeBanner("Para borrar tu cuenta, dime o escribe tu contraseña.")
+                    OutlinedTextField(
+                        value = deletePassword,
+                        onValueChange = { deletePassword = it },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 64.dp)
+                            .voiceHint("Campo de contraseña, para confirmar que quieres borrar tu cuenta. Se ve oculta por seguridad."),
+                        placeholder = { Text("Tu contraseña") },
+                        leadingIcon = { Icon(Icons.Filled.Lock, contentDescription = null) },
+                        trailingIcon = {
+                            IconButton(onClick = { deletePasswordVisible = !deletePasswordVisible }) {
+                                Icon(
+                                    imageVector = if (deletePasswordVisible) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
+                                    contentDescription = if (deletePasswordVisible) "Ocultar contraseña" else "Mostrar contraseña",
+                                )
+                            }
+                        },
+                        singleLine = true,
+                        visualTransformation = if (deletePasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
+                        keyboardActions = KeyboardActions(onDone = {
+                            viewModel.onDeletePasswordEntered(deletePassword)
+                            deletePassword = ""
+                        }),
+                        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = CecapiAccent, unfocusedBorderColor = CecapiTextMuted),
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 8.dp)) {
+                        Button(
+                            onClick = { viewModel.onDeletePasswordEntered(deletePassword); deletePassword = "" },
+                            colors = ButtonDefaults.buttonColors(containerColor = CecapiError, contentColor = Color.White),
+                        ) { Text("Confirmar") }
+                        Button(onClick = { deletePassword = ""; viewModel.cancelDeleteAccount() }) { Text("Cancelar") }
+                    }
+                } else if (pendingDeleteAccount) {
+                    NoticeBanner("¿Borrar tu cuenta y todo lo que guardaste? No se puede deshacer. Di sí, borrar, o no.")
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        SuggestionChip(label = "sí, borrar", onClick = viewModel::confirmDeleteAccount)
+                        SuggestionChip(label = "no", onClick = viewModel::cancelDeleteAccount)
+                    }
+                } else {
+                    ActionButton(
+                        "Borrar mi cuenta y mis datos",
+                        "Borrar mi cuenta y mis datos. Elimina tu cuenta y todo lo que guardaste: chats, resultados, documentos y fotos. " +
+                            "Te pido tu contraseña y luego confirmar; no se puede deshacer. También puedes decir: borra mi cuenta.",
+                        viewModel::askDeleteAccount,
+                    )
                 }
             }
         }

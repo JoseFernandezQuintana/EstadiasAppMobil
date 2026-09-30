@@ -16,10 +16,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -31,7 +27,6 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.contentDescription
@@ -39,7 +34,6 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.cecapi.app.core.theme.CecapiAccent
-import com.cecapi.app.core.theme.CecapiEyebrowStyle
 import com.cecapi.app.core.theme.CecapiSurfaceElevated
 import com.cecapi.app.core.theme.CecapiTextMuted
 import com.cecapi.app.core.ui.ScreenTopBar
@@ -47,6 +41,7 @@ import com.cecapi.app.core.ui.voiceHint
 import com.cecapi.app.core.voice.AddressStyle
 import com.cecapi.app.core.voice.FeedbackCues
 import com.cecapi.app.core.voice.VoiceOption
+import com.cecapi.app.core.voice.VoiceProfile
 import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
 
@@ -66,6 +61,8 @@ fun PersonalizationScreen(
     val soundCues by viewModel.soundCues.collectAsState()
     val vibrationCues by viewModel.vibrationCues.collectAsState()
     val savedLevel by viewModel.vibrationLevel.collectAsState()
+    val blackScreen by viewModel.blackScreen.collectAsState()
+    val minBrightness by viewModel.minBrightness.collectAsState()
 
     LaunchedEffect(Unit) { viewModel.back.collect { onBack() } }
 
@@ -207,6 +204,40 @@ fun PersonalizationScreen(
             ActionButton("Guardar mi nombre", "Guardar mi nombre. Guarda el nombre que escribiste.") {
                 viewModel.onAssistantNameSaved(assistant)
             }
+        }
+
+        Section("PERFIL", "Ajustes listos según quién usa la aplicación, de cualquier edad") {
+            ActionButton(
+                "Niño",
+                "Perfil de niño. Hablo un poco más despacio, con una voz más amable, y te hablo de tú. También puedes decir: perfil de niño.",
+            ) { viewModel.onProfileChosen(VoiceProfile.CHILD) }
+            ActionButton(
+                "Normal",
+                "Perfil normal. Hablo a velocidad normal y te hablo de tú. También puedes decir: perfil normal.",
+            ) { viewModel.onProfileChosen(VoiceProfile.NORMAL) }
+            ActionButton(
+                "Persona mayor",
+                "Perfil de persona mayor. Hablo más despacio y le hablo de usted. También puedes decir: perfil de persona mayor.",
+            ) { viewModel.onProfileChosen(VoiceProfile.SENIOR) }
+        }
+
+        Section("PANTALLA", "Para quien no usa la imagen: todo en negro y con el menor brillo") {
+            SwitchRow(
+                label = "Pantalla negra",
+                description = "Todo se ve negro. Toca la pantalla para hablar; mantenla presionada para volver",
+                checked = blackScreen,
+                onChange = viewModel::onBlackScreenChanged,
+                help = "Pantalla negra. La pantalla se pone completamente negra y la aplicación se maneja solo con la voz. " +
+                    "Tocar la pantalla abre el micrófono. Para volver, di pantalla normal, o mantén presionada la pantalla.",
+            )
+            SwitchRow(
+                label = "Brillo mínimo",
+                description = "Baja el brillo al mínimo mientras la aplicación está abierta",
+                checked = minBrightness,
+                onChange = viewModel::onMinBrightnessChanged,
+                help = "Brillo mínimo. Deja la pantalla con el menor brillo y sin brillo automático mientras la aplicación " +
+                    "está abierta. Al salir de la aplicación, el teléfono vuelve a su brillo normal. Para volver, di brillo normal.",
+            )
         }
 
         Section("AVISOS", "Sonidos y vibraciones para saber qué pasó sin mirar la pantalla") {

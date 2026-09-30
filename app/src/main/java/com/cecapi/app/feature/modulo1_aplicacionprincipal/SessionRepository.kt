@@ -1,5 +1,6 @@
 package com.cecapi.app.feature.modulo1_aplicacionprincipal
 
+import com.cecapi.app.core.data.AccountEraser
 import com.cecapi.app.core.model.ModuloCecapi
 import com.cecapi.app.core.util.PasswordHasher
 import com.cecapi.app.core.voice.VoiceEngine
@@ -24,6 +25,7 @@ class SessionRepository @Inject constructor(
     private val usuarioDao: UsuarioDao,
     private val permisosModuloDao: PermisosModuloDao,
     private val configuracionUsuarioDao: ConfiguracionUsuarioDao,
+    private val accountEraser: AccountEraser,
     private val voiceEngine: VoiceEngine,
 ) {
     private val _currentUser = MutableStateFlow<UsuarioEntity?>(null)
@@ -65,6 +67,14 @@ class SessionRepository @Inject constructor(
     fun logout() {
         _currentUser.value = null
         logoutNoticePending = true
+    }
+
+    /** Deletes the signed-in person's account and all their data, then signs out. False when nobody is signed in. */
+    suspend fun deleteCurrentAccount(): Boolean {
+        val user = _currentUser.value ?: return false
+        accountEraser.erase(user.id)
+        logout()
+        return true
     }
 
     /** True once after a logout, so the home screen can say "Sesión cerrada" as it opens. */

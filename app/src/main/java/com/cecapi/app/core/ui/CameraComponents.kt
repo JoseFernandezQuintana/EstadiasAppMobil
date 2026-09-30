@@ -30,13 +30,23 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.foundation.Image
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -49,6 +59,8 @@ import com.cecapi.app.core.theme.CecapiEyebrowStyle
 import com.cecapi.app.core.theme.CecapiSurfaceElevated
 import com.cecapi.app.core.theme.CecapiTextMuted
 import com.cecapi.app.core.theme.CecapiTextPrimary
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.io.File
 
 /**
@@ -227,3 +239,58 @@ fun ImageCapture.capturePhoto(
         },
     )
 }
+
+/**
+ * Copies a picture the person chose from their gallery into the app's private folder [folder], so the rest of
+ * the app treats it like a photo it took itself and never depends on access to the person's media.
+ * Returns null when the picture cannot be read.
+ */
+suspend fun copyPickedImage(context: Context, source: Uri, folder: String): Pair<Uri, String>? =
+    withContext(Dispatchers.IO) {
+        runCatching {
+            val file = File(context.filesDir, "$folder/pick_${System.currentTimeMillis()}.jpg")
+                .apply { parentFile?.mkdirs() }
+            val copied = context.contentResolver.openInputStream(source)?.use { input ->
+                file.outputStream().use { output -> input.copyTo(output) }
+            }
+            if (copied == null) null else Uri.fromFile(file) to file.absolutePath
+        }.getOrNull()
+    }
+
+/**
+ * The photo just taken (or chosen from the gallery), shown on its own instead of the live camera feed — a
+ * separate "this is the picture you're looking at" area, once there is a picture to look at, for whoever has
+ * some usable vision. Decoded downsampled off the main thread, since a full-resolution photo is too big to
+ * hold as a Compose ImageBitmap comfortably.
+ */
+@Composable
+fun CapturedPhotoPreview(path: String, modifier: Modifier = Modifier) {
+    var bitmap by remember(path) { mutableStateOf<Bitmap?>(null) }
+    LaunchedEffect(path) {
+        bitmap = withContext(Dispatchers.IO) {
+            runCatching {
+                BitmapFactory.decodeFile(path, BitmapFactory.Options().apply { inSampleSize = 2 })
+            }.getOrNull()
+        }
+    }
+    Box(modifier = modifier.background(CecapiSurfaceElevated), contentAlignment = Alignment.Center) {
+        val current = bitmap
+        if (current != null) {
+            Image(
+                bitmap = current.asImageBitmap(),
+                contentDescription = "La foto que tomaste",
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Fit,
+            )
+        } else {
+            CircularProgressIndicator(color = CecapiAccent)
+        }
+    }
+}
+
+/** What people say to choose a picture from their own gallery instead of taking one. */
+val GALLERY_WORDS = arrayOf(
+    "galeria", "mis fotos", "abre mis fotos", "elige una foto", "elegir una foto", "elijo una foto",
+    "escoge una foto", "selecciona una foto", "seleccionar foto", "de mi telefono", "de mi celular",
+    "imagen guardada", "foto guardada", "fotos guardadas",
+)

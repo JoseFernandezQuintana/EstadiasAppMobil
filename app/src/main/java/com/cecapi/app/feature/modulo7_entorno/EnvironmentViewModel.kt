@@ -4,6 +4,8 @@ import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.cecapi.app.core.navigation.CecapiDestinations
+import com.cecapi.app.core.ui.GALLERY_WORDS
+import com.cecapi.app.core.util.StorageReport
 import com.cecapi.app.core.voice.FeedbackCues
 import com.cecapi.app.core.voice.VoiceEngine
 import com.cecapi.app.core.voice.VoiceMessages
@@ -26,6 +28,8 @@ data class EnvironmentUiState(
     val isProcessing: Boolean = false,
     val descripcion: String? = null,
     val errorMessage: String? = null,
+    /** The photo being described, shown in its own area instead of the live camera feed while there is one. */
+    val photoPath: String? = null,
 )
 
 @HiltViewModel
@@ -34,6 +38,7 @@ class EnvironmentViewModel @Inject constructor(
     private val sessionRepository: SessionRepository,
     private val repository: EnvironmentRepository,
     private val cues: FeedbackCues,
+    private val storageReport: StorageReport,
 ) : ViewModel() {
 
     val voiceState: StateFlow<VoiceState> = voiceEngine.state.stateIn(
@@ -49,6 +54,10 @@ class EnvironmentViewModel @Inject constructor(
 
     private val _back = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     val back: SharedFlow<Unit> = _back
+
+    // Asks the screen to open the system picture picker (it owns the activity result launcher).
+    private val _pickRequests = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    val pickRequests: SharedFlow<Unit> = _pickRequests
 
     private val _routes = MutableSharedFlow<String>(extraBufferCapacity = 1)
     val routes: SharedFlow<String> = _routes
@@ -67,15 +76,16 @@ class EnvironmentViewModel @Inject constructor(
     /** The commands this screen answers, most specific first. */
     private fun onSpeech(spoken: String) {
         val text = VoiceText.normalize(spoken)
-        fun has(vararg words: String) = words.any { it in text }
+        fun has(vararg words: String) = VoiceText.hasAny(text, *words)
         when {
             CommandCatalog.isRequest(spoken) -> voiceEngine.speak(CommandCatalog.ENVIRONMENT, listenAfter = true)
-            has("atras", "volver", "salir", "menu", "regresa") -> _back.tryEmit(Unit)
+            has("atras", "volver", "vuelve", "regresa", "regresar", "salir", "menu", "inicio", "pantalla anterior") -> _back.tryEmit(Unit)
             has("leer texto", "lee", "leer", "texto", "documento") -> {
                 cues.play(FeedbackCues.Cue.NAVIGATE)
                 voiceEngine.speak("Cambiando al lector de texto.")
                 _routes.tryEmit(CecapiDestinations.DOCUMENT_READER)
             }
+            has(*GALLERY_WORDS) -> pedirGaleria()
             has("otra vez", "repite", "repetir", "de nuevo", "dilo") -> repetir()
             has("enfrente", "describe", "descripcion", "foto", "fotografia", "captura", "toma", "analiza",
                 "que hay", "que ves", "entorno") -> pedirCaptura()
@@ -91,9 +101,20 @@ class EnvironmentViewModel @Inject constructor(
 
     /** Descriptions are saved to the person's history, so a signed-in user is needed. */
     private fun sesionIniciada(): Boolean {
-        if (sessionRepository.currentUser.value != null) return true
-        voiceEngine.speak(VoiceMessages.NEEDS_LOGIN)
-        return false
+        if (sessionRepository.currentUser.value == null) {
+            voiceEngine.speak(VoiceMessages.NEEDS_LOGIN)
+            return false
+        }
+        // Every photo is kept on the phone, so with almost no room left it is better to say so than to fill it.
+        if (storageReport.criticallyLow()) {
+            cues.play(FeedbackCues.Cue.WARNING)
+            voiceEngine.speak(
+                "Queda muy poco espacio en el teléfono y no puedo guardar más fotos. " +
+                    "Ve a configuración y di libera espacio, o limpia la caché.",
+            )
+            return false
+        }
+        return true
     }
 
     /** Also what the on-screen button and the "qué hay enfrente" chip call. */
@@ -119,6 +140,25 @@ class EnvironmentViewModel @Inject constructor(
         voiceEngine.speak("Sin el permiso de la cámara no puedo describir lo que hay enfrente. Actívalo en los ajustes de la aplicación.")
     }
 
+    /**
+     * "Elige una foto": opens the system picture picker. The person picks one picture and the app sees only
+     * that one; there is no permission to the whole gallery. Said out loud first so it is always their decision.
+     */
+    fun pedirGaleria() {
+        if (_uiState.value.isProcessing || !sesionIniciada()) return
+        voiceEngine.speak("Voy a abrir tus fotos. Elige la imagen que quieres que describa; solo veré esa.")
+        _pickRequests.tryEmit(Unit)
+    }
+
+    fun onPickCancelled() {
+        voiceEngine.speak("No elegiste ninguna foto. Di qué hay enfrente, o elige una foto.", listenAfter = true)
+    }
+
+    fun onPickFailed() {
+        cues.play(FeedbackCues.Cue.ERROR)
+        voiceEngine.speak("No pude abrir esa imagen. Prueba con otra.", listenAfter = true)
+    }
+
     fun onCaptureFailed() {
         val message = "No pude tomar la foto. Revisa que la cámara esté libre e intenta de nuevo."
         _uiState.value = EnvironmentUiState(errorMessage = message)
@@ -132,12 +172,12 @@ class EnvironmentViewModel @Inject constructor(
             voiceEngine.speak(VoiceMessages.NEEDS_LOGIN)
             return
         }
-        _uiState.value = EnvironmentUiState(isProcessing = true)
+        _uiState.value = EnvironmentUiState(isProcessing = true, photoPath = rutaImagen)
         voiceEngine.speak("Analizando el entorno.")
         viewModelScope.launch {
             repository.processCapturedPhoto(usuario.id, imageUri, rutaImagen)
                 .onSuccess { result ->
-                    _uiState.value = EnvironmentUiState(descripcion = result.descripcion)
+                    _uiState.value = EnvironmentUiState(descripcion = result.descripcion, photoPath = rutaImagen)
                     voiceEngine.speak(result.descripcion)
                 }
                 .onFailure {

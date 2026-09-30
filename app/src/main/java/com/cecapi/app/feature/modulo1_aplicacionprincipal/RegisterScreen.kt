@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Badge
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Person
@@ -40,6 +41,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -51,7 +54,6 @@ import com.cecapi.app.core.theme.CecapiAccent
 import com.cecapi.app.core.theme.CecapiError
 import com.cecapi.app.core.theme.CecapiEyebrowStyle
 import com.cecapi.app.core.theme.CecapiTextMuted
-import com.cecapi.app.core.ui.VoiceCaptionBubble
 import com.cecapi.app.core.ui.VoiceMicButton
 import com.cecapi.app.core.ui.voiceHint
 import com.cecapi.app.core.voice.VoiceState
@@ -59,6 +61,7 @@ import com.cecapi.app.core.voice.VoiceState
 @Composable
 fun RegisterScreen(
     onRegisterSuccess: () -> Unit,
+    onBack: () -> Unit = {},
     viewModel: RegisterViewModel = hiltViewModel(),
 ) {
     val context = LocalContext.current
@@ -73,6 +76,9 @@ fun RegisterScreen(
     LaunchedEffect(Unit) {
         viewModel.registerSucceeded.collect { onRegisterSuccess() }
     }
+    LaunchedEffect(Unit) {
+        viewModel.back.collect { onBack() }
+    }
 
     Column(
         modifier = Modifier
@@ -80,6 +86,18 @@ fun RegisterScreen(
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 24.dp, vertical = 32.dp),
     ) {
+        // Visible way back for someone navigating by touch, not only by voice ("atrás").
+        val backHelp = "Volver. Regresa a la pantalla anterior."
+        IconButton(
+            onClick = onBack,
+            modifier = Modifier
+                .size(48.dp)
+                .semantics { contentDescription = backHelp }
+                .voiceHint(backHelp),
+        ) {
+            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null, tint = CecapiAccent)
+        }
+
         Text("CREAR CUENTA", style = CecapiEyebrowStyle, color = CecapiTextMuted)
         Text(
             "Crea tu cuenta",
@@ -91,6 +109,7 @@ fun RegisterScreen(
         Box(modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp)) {
             VoiceMicButton(
                 isListening = voiceState is VoiceState.Listening,
+                onDoubleTap = viewModel::onMicDoubleTap,
                 onClick = {
                     val granted = ContextCompat.checkSelfPermission(
                         context, Manifest.permission.RECORD_AUDIO,

@@ -2,12 +2,14 @@ package com.cecapi.app.feature.modulo1_aplicacionprincipal
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.cecapi.app.core.util.DisplayControl
 import com.cecapi.app.core.voice.AddressStyle
 import com.cecapi.app.core.voice.AssistantPreferences
 import com.cecapi.app.core.voice.DeviceSettings
 import com.cecapi.app.core.voice.FeedbackCues
 import com.cecapi.app.core.voice.VoiceEngine
 import com.cecapi.app.core.voice.VoiceOption
+import com.cecapi.app.core.voice.VoiceProfile
 import com.cecapi.app.core.voice.VoiceText
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -29,6 +31,7 @@ class PersonalizationViewModel @Inject constructor(
     private val deviceSettings: DeviceSettings,
     private val assistantPreferences: AssistantPreferences,
     private val cues: FeedbackCues,
+    private val displayControl: DisplayControl,
 ) : ViewModel() {
 
     val speechRate: StateFlow<Float> = deviceSettings.speechRate.stateIn(viewModelScope, SharingStarted.Eagerly, 1.0f)
@@ -40,6 +43,8 @@ class PersonalizationViewModel @Inject constructor(
     val soundCues: StateFlow<Boolean> = deviceSettings.soundCues.stateIn(viewModelScope, SharingStarted.Eagerly, true)
     val vibrationCues: StateFlow<Boolean> = deviceSettings.vibrationCues.stateIn(viewModelScope, SharingStarted.Eagerly, true)
     val vibrationLevel: StateFlow<Int> = deviceSettings.vibrationLevel.stateIn(viewModelScope, SharingStarted.Eagerly, 2)
+    val blackScreen: StateFlow<Boolean> = deviceSettings.blackScreen.stateIn(viewModelScope, SharingStarted.Eagerly, false)
+    val minBrightness: StateFlow<Boolean> = deviceSettings.minBrightness.stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     private val _back = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     val back: SharedFlow<Unit> = _back
@@ -59,7 +64,7 @@ class PersonalizationViewModel @Inject constructor(
     /** The commands this screen answers; each one does what the matching control on screen does. */
     private fun onSpeech(spoken: String) {
         val text = VoiceText.normalize(spoken)
-        fun has(vararg words: String) = words.any { it in text }
+        fun has(vararg words: String) = VoiceText.hasAny(text, *words)
         val newAssistantName = ASSISTANT_NAME.find(spoken)?.groupValues?.get(1)
         val newUserName = USER_NAME.find(spoken)?.groupValues?.get(1)
         when {
@@ -73,14 +78,14 @@ class PersonalizationViewModel @Inject constructor(
             has("prueba de voz", "probar voz", "prueba la voz", "escuchate", "di algo") -> onTestVoice()
             has("mas rapido", "mas veloz", "acelera", "habla mas rapido") -> onSpeechRateChanged((speechRate.value + 0.25f).coerceIn(0.5f, 2.0f))
             has("mas lento", "mas despacio", "despacio", "habla mas lento") -> onSpeechRateChanged((speechRate.value - 0.25f).coerceIn(0.5f, 2.0f))
-            has("mas grave", "voz grave", "mas bajo") -> onPitchChanged((pitch.value - 0.25f).coerceIn(0.5f, 2.0f))
-            has("mas agudo", "voz aguda", "mas alto") -> onPitchChanged((pitch.value + 0.25f).coerceIn(0.5f, 2.0f))
+            has("mas grave", "voz grave") -> onPitchChanged((pitch.value - 0.25f).coerceIn(0.5f, 2.0f))
+            has("mas agudo", "voz aguda") -> onPitchChanged((pitch.value + 0.25f).coerceIn(0.5f, 2.0f))
             has("vibracion") && has("suave") -> onVibrationLevelChanged(1)
             has("vibracion") && has("fuerte") -> onVibrationLevelChanged(3)
             has("vibracion") && has("normal") -> onVibrationLevelChanged(2)
             has("vibracion") && onOff(text) != null -> onVibrationCuesChanged(onOff(text) == true)
             has("sonido") && onOff(text) != null -> onSoundCuesChanged(onOff(text) == true)
-            has("atras", "volver", "salir", "menu", "regresa") -> _back.tryEmit(Unit)
+            has("atras", "volver", "vuelve", "regresa", "regresar", "salir", "menu", "inicio", "pantalla anterior") -> _back.tryEmit(Unit)
             else -> {
                 cues.play(FeedbackCues.Cue.NOT_UNDERSTOOD)
                 voiceEngine.speak("No entendí. " + CommandCatalog.hint("personalización"), listenAfter = true)
@@ -90,8 +95,8 @@ class PersonalizationViewModel @Inject constructor(
 
     /** "Desactiva" contains "activa", so the negative words are checked first. */
     private fun onOff(text: String): Boolean? = when {
-        listOf("desactiv", "apaga", "quita", "sin ", "no quiero").any { it in text } -> false
-        listOf("activ", "enciende", "prende", "pon ", "quiero").any { it in text } -> true
+        listOf("desactiv*", "apaga", "quita", "sin", "no quiero").let { phrases -> VoiceText.hasAny(text, phrases) } -> false
+        listOf("activ*", "enciende", "prende", "pon", "quiero").let { phrases -> VoiceText.hasAny(text, phrases) } -> true
         else -> null
     }
 
@@ -205,6 +210,18 @@ class PersonalizationViewModel @Inject constructor(
             },
         )
     }
+
+    /** A ready-made way of talking for a child, an adult or an older person: speed, pitch and tú or usted. */
+    fun onProfileChosen(profile: VoiceProfile) {
+        viewModelScope.launch { deviceSettings.applyProfile(profile) }
+        voiceEngine.applyVoiceSettings(profile.rate, 1.0f) // so the announcement already sounds the new way
+        voiceEngine.addressStyle = profile.address
+        voiceEngine.speak(profile.announcement)
+    }
+
+    fun onBlackScreenChanged(enabled: Boolean) = displayControl.setBlackScreen(enabled)
+
+    fun onMinBrightnessChanged(enabled: Boolean) = displayControl.setMinBrightness(enabled)
 
     fun onTestCue(cue: FeedbackCues.Cue, description: String) {
         cues.play(cue)

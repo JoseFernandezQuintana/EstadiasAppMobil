@@ -22,6 +22,10 @@ import com.cecapi.app.feature.modulo7_entorno.ObjetoDetectadoDao
 import com.cecapi.app.feature.modulo7_entorno.ObjetoDetectadoEntity
 import com.cecapi.app.feature.modulo6_aprendizaje.EjercicioDao
 import com.cecapi.app.feature.modulo6_aprendizaje.EjercicioEntity
+import com.cecapi.app.feature.modulo6_aprendizaje.EjercicioVibracionDao
+import com.cecapi.app.feature.modulo6_aprendizaje.EjercicioVibracionEntity
+import com.cecapi.app.feature.modulo6_aprendizaje.ResultadoVibracionDao
+import com.cecapi.app.feature.modulo6_aprendizaje.ResultadoVibracionEntity
 import com.cecapi.app.feature.modulo6_aprendizaje.NivelAprendizajeDao
 import com.cecapi.app.feature.modulo6_aprendizaje.NivelAprendizajeEntity
 import com.cecapi.app.feature.modulo6_aprendizaje.ResultadoEjercicioDao
@@ -45,13 +49,7 @@ import com.cecapi.app.feature.modulo2_asistentevoz.HistorialComandoEntity
 import com.cecapi.app.feature.modulo2_asistentevoz.RespuestaAuditivaDao
 import com.cecapi.app.feature.modulo2_asistentevoz.RespuestaAuditivaEntity
 
-/**
- * Single Room database for the whole app. Each of the 7 v1.0 modules owns its
- * own tables (see docs/database/schema.sql for the equivalent raw DDL); this
- * is the "mixed" strategy from the proposal — per-module tables, one physical
- * database, so a defense can point at one team's 3 tables while the app still
- * ships as a single coherent product.
- */
+/** Single Room database for the whole app; each module owns its own tables. */
 @Database(
     entities = [
         // Módulo 1 — Aplicación Principal Accesible
@@ -78,12 +76,14 @@ import com.cecapi.app.feature.modulo2_asistentevoz.RespuestaAuditivaEntity
         EjercicioEntity::class,
         ResultadoEjercicioEntity::class,
         NivelAprendizajeEntity::class,
+        EjercicioVibracionEntity::class,
+        ResultadoVibracionEntity::class,
         // Módulo 7 — Asistente del Entorno
         EscaneoEntornoEntity::class,
         ObjetoDetectadoEntity::class,
         DescripcionEntornoEntity::class,
     ],
-    version = 2,
+    version = 3,
     exportSchema = false,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -110,6 +110,8 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun ejercicioDao(): EjercicioDao
     abstract fun resultadoEjercicioDao(): ResultadoEjercicioDao
     abstract fun nivelAprendizajeDao(): NivelAprendizajeDao
+    abstract fun ejercicioVibracionDao(): EjercicioVibracionDao
+    abstract fun resultadoVibracionDao(): ResultadoVibracionDao
 
     abstract fun escaneoEntornoDao(): EscaneoEntornoDao
     abstract fun objetoDetectadoDao(): ObjetoDetectadoDao

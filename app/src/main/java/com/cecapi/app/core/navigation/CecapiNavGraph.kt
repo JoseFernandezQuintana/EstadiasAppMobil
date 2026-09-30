@@ -15,6 +15,7 @@ import com.cecapi.app.feature.modulo1_aplicacionprincipal.LoginScreen
 import com.cecapi.app.feature.modulo1_aplicacionprincipal.RegisterScreen
 import com.cecapi.app.core.ui.WakeScope
 import com.cecapi.app.feature.modulo1_aplicacionprincipal.CameraHubScreen
+import com.cecapi.app.feature.modulo1_aplicacionprincipal.ChatsScreen
 import com.cecapi.app.feature.modulo1_aplicacionprincipal.PersonalizationScreen
 import com.cecapi.app.feature.modulo1_aplicacionprincipal.SettingsScreen
 import com.cecapi.app.feature.modulo5_solicitudes.RequestsScreen
@@ -38,16 +39,20 @@ fun CecapiNavGraph(navController: NavHostController = rememberNavController()) {
                     }
                 },
                 onNavigateToRegister = { navController.navigate(CecapiDestinations.REGISTER) },
+                onBack = { navController.popBackStack() },
             )
         }
         composable(CecapiDestinations.REGISTER) {
-            RegisterScreen(
-                onRegisterSuccess = {
-                    navController.navigate(CecapiDestinations.DASHBOARD) {
-                        popUpTo(CecapiDestinations.HOME) { inclusive = true }
-                    }
-                },
-            )
+            WakeScope {
+                RegisterScreen(
+                    onRegisterSuccess = {
+                        navController.navigate(CecapiDestinations.DASHBOARD) {
+                            popUpTo(CecapiDestinations.HOME) { inclusive = true }
+                        }
+                    },
+                    onBack = { navController.popBackStack() },
+                )
+            }
         }
         composable(CecapiDestinations.DASHBOARD) {
             DashboardScreen(
@@ -73,6 +78,9 @@ fun CecapiNavGraph(navController: NavHostController = rememberNavController()) {
         }
         composable(CecapiDestinations.PERSONALIZATION) {
             WakeScope { PersonalizationScreen(onBack = { navController.popBackStack() }) }
+        }
+        composable(CecapiDestinations.CHATS) {
+            WakeScope { ChatsScreen(onBack = { navController.popBackStack() }) }
         }
         composable(CecapiDestinations.CAMERA_HUB) {
             WakeScope {
@@ -104,7 +112,7 @@ fun CecapiNavGraph(navController: NavHostController = rememberNavController()) {
             WakeScope { RequestsScreen(onBack = { navController.popBackStack() }) }
         }
         composable(CecapiDestinations.LEARNING) {
-            WakeScope { LearningScreen() }
+            WakeScope { LearningScreen(onBack = { navController.popBackStack() }) }
         }
         composable(CecapiDestinations.ENVIRONMENT) {
             WakeScope {

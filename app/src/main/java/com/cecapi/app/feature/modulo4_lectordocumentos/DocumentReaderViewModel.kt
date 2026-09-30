@@ -4,6 +4,8 @@ import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.cecapi.app.core.navigation.CecapiDestinations
+import com.cecapi.app.core.ui.GALLERY_WORDS
+import com.cecapi.app.core.util.StorageReport
 import com.cecapi.app.core.voice.AssistantMode
 import com.cecapi.app.core.voice.FeedbackCues
 import com.cecapi.app.core.voice.VoiceEngine
@@ -34,6 +36,8 @@ data class DocumentReaderUiState(
     val parrafoActual: Int = 0,
     val estaLeyendo: Boolean = false,
     val capturaArmada: Boolean = false,
+    /** The photo being read, shown in its own area instead of the live camera feed while there is one. */
+    val photoPath: String? = null,
 )
 
 @HiltViewModel
@@ -42,6 +46,7 @@ class DocumentReaderViewModel @Inject constructor(
     private val sessionRepository: SessionRepository,
     private val repository: DocumentReaderRepository,
     private val cues: FeedbackCues,
+    private val storageReport: StorageReport,
 ) : ViewModel() {
 
     val voiceState: StateFlow<VoiceState> = voiceEngine.state.stateIn(
@@ -63,6 +68,10 @@ class DocumentReaderViewModel @Inject constructor(
     private val _back = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     val back: SharedFlow<Unit> = _back
 
+    // Asks the screen to open the system picture picker (it owns the activity result launcher).
+    private val _pickRequests = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    val pickRequests: SharedFlow<Unit> = _pickRequests
+
     private val _routes = MutableSharedFlow<String>(extraBufferCapacity = 1)
     val routes: SharedFlow<String> = _routes
 
@@ -80,12 +89,12 @@ class DocumentReaderViewModel @Inject constructor(
     /** The commands the reader answers, most specific first. */
     private fun onSpeech(spoken: String) {
         val text = VoiceText.normalize(spoken)
-        fun has(vararg words: String) = words.any { it in text }
+        fun has(vararg words: String) = VoiceText.hasAny(text, *words)
         val hayDocumento = _uiState.value.parrafos.isNotEmpty()
         when {
             CommandCatalog.isRequest(spoken) -> voiceEngine.speak(CommandCatalog.READER, listenAfter = true)
             has("parrafo anterior", "anterior") -> anteriorParrafo()
-            has("atras", "volver", "salir", "menu", "regresa") -> {
+            has("atras", "volver", "vuelve", "regresa", "regresar", "salir", "menu", "inicio", "pantalla anterior") -> {
                 detenerLectura()
                 _back.tryEmit(Unit)
             }
@@ -93,6 +102,7 @@ class DocumentReaderViewModel @Inject constructor(
                 CecapiDestinations.ENVIRONMENT,
                 "Cambiando a describir lo que hay enfrente.",
             )
+            has(*GALLERY_WORDS) -> pedirGaleria()
             has("otra foto", "nueva foto", "otro documento", "nuevo documento", "otro papel") -> nuevaFoto(
                 tomarYa = has("toma", "captura", "saca"),
             )
@@ -115,8 +125,21 @@ class DocumentReaderViewModel @Inject constructor(
 
     /** Reading needs a signed-in person because every document is saved to their history. */
     private fun sesionIniciada(): Boolean {
-        if (sessionRepository.currentUser.value != null) return true
-        voiceEngine.speak(VoiceMessages.NEEDS_LOGIN)
+        if (sessionRepository.currentUser.value == null) {
+            voiceEngine.speak(VoiceMessages.NEEDS_LOGIN)
+            return false
+        }
+        return hayEspacio()
+    }
+
+    /** Every photo is kept on the phone, so with almost no room left it is better to say so than to fill it. */
+    private fun hayEspacio(): Boolean {
+        if (!storageReport.criticallyLow()) return true
+        cues.play(FeedbackCues.Cue.WARNING)
+        voiceEngine.speak(
+            "Queda muy poco espacio en el teléfono y no puedo guardar más fotos. " +
+                "Ve a configuración y di libera espacio, o limpia la caché.",
+        )
         return false
     }
 
@@ -147,6 +170,26 @@ class DocumentReaderViewModel @Inject constructor(
         voiceEngine.speak("Sin el permiso de la cámara no puedo leer. Actívalo en los ajustes de la aplicación.")
     }
 
+    /**
+     * "Elige una foto": opens the system picture picker. The person picks one picture and the app sees only
+     * that one; there is no permission to the whole gallery. Said out loud first so it is always their decision.
+     */
+    fun pedirGaleria() {
+        if (_uiState.value.isProcessing || !sesionIniciada()) return
+        detenerLectura()
+        voiceEngine.speak("Voy a abrir tus fotos. Elige la imagen que quieres que lea; solo veré esa.")
+        _pickRequests.tryEmit(Unit)
+    }
+
+    fun onPickCancelled() {
+        voiceEngine.speak("No elegiste ninguna foto. Di toma la foto, o elige una foto.", listenAfter = true)
+    }
+
+    fun onPickFailed() {
+        cues.play(FeedbackCues.Cue.ERROR)
+        voiceEngine.speak("No pude abrir esa imagen. Prueba con otra.", listenAfter = true)
+    }
+
     fun onCaptureFailed() {
         val message = "No pude tomar la foto. Revisa que la cámara esté libre e intenta de nuevo."
         _uiState.value = DocumentReaderUiState(errorMessage = message)
@@ -165,6 +208,7 @@ class DocumentReaderViewModel @Inject constructor(
             errorMessage = null,
             estaLeyendo = false,
             capturaArmada = false,
+            photoPath = rutaImagen, // shown right away, in place of the live feed, while it processes
         )
         voiceEngine.speak("Procesando la imagen.")
         viewModelScope.launch {
@@ -174,6 +218,7 @@ class DocumentReaderViewModel @Inject constructor(
                         documentoId = outcome.documentoId,
                         recognizedText = outcome.textoCompleto,
                         parrafos = outcome.parrafos,
+                        photoPath = rutaImagen,
                     )
                     leerParrafo(0)
                     repository.logLectura(outcome.documentoId)
@@ -205,7 +250,7 @@ class DocumentReaderViewModel @Inject constructor(
         var i = indice
         while (i < lista.size && VoiceText.forSpeech(lista[i]).isBlank()) i++
         val parrafo = lista.getOrNull(i)
-        if (parrafo == null || voiceEngine.mode.value != AssistantMode.ACTIVE) {
+        if (parrafo == null || voiceEngine.mode.value != AssistantMode.ACTIVE || !voiceEngine.appVisible) {
             _uiState.value = _uiState.value.copy(estaLeyendo = false)
             return
         }
@@ -307,8 +352,9 @@ class DocumentReaderViewModel @Inject constructor(
                         // Otro módulo habló encima de la lectura: la damos por interrumpida.
                         _uiState.value = state.copy(estaLeyendo = false)
                     } else if (actual is VoiceState.Idle && anterior == VoiceState.Speaking(hablado)) {
-                        if (voiceEngine.mode.value != AssistantMode.ACTIVE) {
-                            // "Silencio" o "para" cortaron la voz: no seguir leyendo.
+                        val interrumpida = System.currentTimeMillis() - voiceEngine.lastBargeInAt < BARGE_IN_WINDOW_MS
+                        if (voiceEngine.mode.value != AssistantMode.ACTIVE || !voiceEngine.appVisible || interrumpida) {
+                            // "Silencio" o "para", salir de la app, o hablar encima de la lectura: no seguir leyendo.
                             _uiState.value = state.copy(estaLeyendo = false)
                         } else {
                             siguienteAutomatico(state)
@@ -332,5 +378,10 @@ class DocumentReaderViewModel @Inject constructor(
     override fun onCleared() {
         if (_uiState.value.estaLeyendo) voiceEngine.stopSpeaking()
         super.onCleared()
+    }
+
+    private companion object {
+        /** If the person spoke over the reading this recently, the pause in the voice was theirs: do not read on. */
+        const val BARGE_IN_WINDOW_MS = 1_500L
     }
 }

@@ -52,6 +52,9 @@ class LoginViewModel @Inject constructor(
     private val _navigateToRegister = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     val navigateToRegister: SharedFlow<Unit> = _navigateToRegister
 
+    private val _back = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    val back: SharedFlow<Unit> = _back
+
     private var step = LoginVoiceStep.COMMAND
         set(value) {
             field = value
@@ -206,6 +209,18 @@ class LoginViewModel @Inject constructor(
         val words = VoiceText.normalize(text)
         val fields = parseFields(text)
         when {
+            // Before the field parser: "olvidé mi contraseña" ends in the word "contraseña" with nothing
+            // after it, which the parser would otherwise read as "start dictating the password" — and then
+            // whatever the person said next would be tried as the password itself and fail.
+            VoiceText.hasAny(words, FORGOT_PASSWORD_PHRASES) -> voiceEngine.speak(
+                "Todavía no hay una forma automática de recuperar tu contraseña. Pide a un administrador o " +
+                    "a quien te dio de alta que te ayude a restablecerla.",
+                listenAfter = true,
+            )
+            VoiceText.hasAny(words, EXIT_PHRASES) -> {
+                voiceEngine.speak("Volviendo al inicio.")
+                _back.tryEmit(Unit)
+            }
             wantsRegister(words) -> {
                 voiceEngine.speak("Vamos a crear tu cuenta.")
                 _navigateToRegister.tryEmit(Unit)
@@ -294,7 +309,7 @@ class LoginViewModel @Inject constructor(
                 voiceEngine.speak("Ocurrió un problema al verificar tus datos. Intenta de nuevo en unos segundos.")
                 return@launch
             }
-            Log.d(TAG, "login attempt user=$username success=${result is LoginResult.Success}")
+            Log.d(TAG, "login attempt success=${result is LoginResult.Success}")
             when (result) {
                 is LoginResult.Success -> {
                     attemptsStore.reset()
@@ -383,5 +398,10 @@ class LoginViewModel @Inject constructor(
         val FILLER_PREFIX = Regex("^\\s*(?:(?:es|son|sera|seria|va a ser|de|el|la|mi|tu)\\s+)*")
         val SUBMIT_WORDS = listOf("ingresa", "ingresar", "entrar", "entra", "iniciar", "inicia", "listo", "aceptar", "enviar")
         val CANCEL_WORDS = setOf("cancelar", "cancela", "atras", "no", "borrar")
+        val FORGOT_PASSWORD_PHRASES = listOf(
+            "olvide mi contrasena", "olvide la contrasena", "se me olvido la contrasena", "se me olvido mi contrasena",
+            "no recuerdo mi contrasena", "no me acuerdo de mi contrasena", "perdi mi contrasena",
+        )
+        val EXIT_PHRASES = listOf("atras", "volver", "vuelve", "regresa", "regresar", "salir", "menu", "inicio")
     }
 }

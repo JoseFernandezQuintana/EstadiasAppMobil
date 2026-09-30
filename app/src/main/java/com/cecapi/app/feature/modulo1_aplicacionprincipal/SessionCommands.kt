@@ -15,7 +15,7 @@ object SessionCommands {
         "salir de la aplicacion", "salir de la app", "salir de aqui", "apagar la aplicacion", "cerrar todo",
     )
 
-    fun isLogout(spoken: String): Boolean = VoiceText.normalize(spoken).let { text -> logoutPhrases.any { it in text } }
+    fun isLogout(spoken: String): Boolean = VoiceText.normalize(spoken).let { text -> logoutPhrases.let { phrases -> VoiceText.hasAny(text, phrases) } }
 
-    fun isExitApp(spoken: String): Boolean = VoiceText.normalize(spoken).let { text -> exitPhrases.any { it in text } }
+    fun isExitApp(spoken: String): Boolean = VoiceText.normalize(spoken).let { text -> exitPhrases.let { phrases -> VoiceText.hasAny(text, phrases) } }
 }

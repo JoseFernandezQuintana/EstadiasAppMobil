@@ -32,18 +32,16 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.cecapi.app.core.model.ModuloCecapi
 import com.cecapi.app.core.theme.CecapiAccent
 import com.cecapi.app.core.theme.CecapiEyebrowStyle
 import com.cecapi.app.core.theme.CecapiTextMuted
-import com.cecapi.app.core.ui.MenuItem
 import com.cecapi.app.core.ui.MicPad
 import com.cecapi.app.core.ui.ModuleCarousel
 import com.cecapi.app.core.ui.NoticeBanner
 import com.cecapi.app.core.ui.OfflineBanner
 import com.cecapi.app.core.ui.SuggestionChip
 import com.cecapi.app.core.ui.TopAction
-import com.cecapi.app.core.ui.toMenuItem
+import com.cecapi.app.core.util.openTtsSettings
 import com.cecapi.app.core.voice.VoiceMessages
 import com.cecapi.app.core.voice.VoiceState
 
@@ -148,6 +146,7 @@ fun HomeScreen(
         // The microphone is the main control of the whole app, so it takes over most of the screen:
         // a huge target is easy to find by touch without seeing anything.
         MicPad(
+            onDoubleTap = viewModel::onMicDoubleTap,
             listening = listening,
             hint = when {
                 listening -> "Escuchando…"
@@ -169,9 +168,14 @@ fun HomeScreen(
         if (!hasMicPermission) {
             NoticeBanner(VoiceMessages.MIC_DENIED, modifier = Modifier.padding(horizontal = 24.dp).padding(top = 16.dp))
         } else if (voiceState is VoiceState.Error) {
+            val error = voiceState as VoiceState.Error
             NoticeBanner(
-                (voiceState as VoiceState.Error).message,
+                error.message,
                 modifier = Modifier.padding(horizontal = 24.dp).padding(top = 16.dp),
+                actionLabel = if (error.openTtsSettings) "Elegir motor de voz" else null,
+                onAction = if (error.openTtsSettings) {
+                    { openTtsSettings(context) }
+                } else null,
             )
         }
         if (!isOnline) {

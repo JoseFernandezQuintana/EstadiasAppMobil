@@ -122,9 +122,9 @@ class CameraHubViewModel @Inject constructor(
         val text = VoiceText.normalize(spoken)
         when {
             CommandCatalog.isRequest(spoken) -> onCommandsRequested()
-            listOf("atras", "volver", "regresa", "menu", "inicio").any { it in text } -> _back.tryEmit(Unit)
-            listOf("enfrente", "entorno", "descri", "alrededor", "que hay").any { it in text } -> openEnvironment()
-            listOf("texto", "leer", "lee", "documento", "letra", "papel").any { it in text } -> openTextReader()
+            listOf("atras", "volver", "vuelve", "regresa", "regresar", "salir", "menu", "inicio", "pantalla anterior").let { phrases -> VoiceText.hasAny(text, phrases) } -> _back.tryEmit(Unit)
+            listOf("enfrente", "entorno", "descri*", "alrededor", "que hay").let { phrases -> VoiceText.hasAny(text, phrases) } -> openEnvironment()
+            listOf("texto", "leer", "lee", "documento", "letra", "papel").let { phrases -> VoiceText.hasAny(text, phrases) } -> openTextReader()
             else -> {
                 cues.play(FeedbackCues.Cue.NOT_UNDERSTOOD)
                 voiceEngine.speak(

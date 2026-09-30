@@ -27,16 +27,23 @@ class PhoneStatusReader @Inject constructor(
     /** The spoken answer if [spoken] asks about the phone's state, or null if it is about something else. */
     fun answer(spoken: String): String? {
         val text = VoiceText.normalize(spoken)
+        val significant = text.split(" ").filter { it.isNotEmpty() && it !in FILLER }
+        // Only a short question is about the phone. A longer sentence that merely mentions "hora" or "internet" is
+        // an answer to a form or a question for the AI, and must reach the screen instead.
+        if (significant.size > MAX_TOPIC_WORDS) return null
+        // The date words are common inside an ordinary sentence ("el 5 de este mes", "el año pasado"), so they
+        // only answer when the question is essentially bare: the trigger word and, at most, one filler-adjacent word.
+        val bareDateQuestion = significant.size <= 1
         return when {
             listOf("estado del telefono", "estado del celular", "estado de la pantalla", "estado del dispositivo",
-                "como esta mi telefono", "como esta mi celular").any { it in text } -> fullReport()
-            listOf("bateria", "pila", "cuanta carga").any { it in text } -> battery()
-            listOf("wifi", "wi fi", "internet", "senal", "cobertura", "datos moviles", "conexion").any { it in text } -> network()
-            Regex("\\bhora\\b").containsMatchIn(text) -> time()
-            Regex("\\bano\\b").containsMatchIn(text) -> year()
-            Regex("\\bmes\\b").containsMatchIn(text) -> month()
-            listOf("que dia", "dia es", "dia de hoy").any { it in text } -> today()
-            "fecha" in text -> date()
+                "como esta mi telefono", "como esta mi celular").let { phrases -> VoiceText.hasAny(text, phrases) } -> fullReport()
+            listOf("bateria", "pila", "cuanta carga").let { phrases -> VoiceText.hasAny(text, phrases) } -> battery()
+            listOf("wifi", "wi fi", "internet", "senal", "cobertura", "datos moviles", "conexion").let { phrases -> VoiceText.hasAny(text, phrases) } -> network()
+            bareDateQuestion && HOUR.containsMatchIn(text) -> time()
+            bareDateQuestion && YEAR.containsMatchIn(text) -> year()
+            bareDateQuestion && MONTH.containsMatchIn(text) -> month()
+            listOf("que dia", "dia es", "dia de hoy").let { phrases -> VoiceText.hasAny(text, phrases) } -> today()
+            bareDateQuestion && VoiceText.hasAny(text, "fecha") -> date()
             else -> null
         }
     }
@@ -116,6 +123,21 @@ class PhoneStatusReader @Inject constructor(
 
     private companion object {
         val LOCALE: Locale = Locale("es", "MX")
+        /**
+         * Words that carry no topic. A question about the phone is short once these are set aside ("qué hora es"),
+         * while "a qué hora abre el banco" or "el 5 de este mes" has more to it and belongs to the screen or the AI.
+         */
+        val FILLER = setOf(
+            "que", "cual", "cuanto", "cuanta", "como", "esta", "estoy", "es", "el", "la", "los", "las", "de", "del", "en",
+            "a", "un", "una", "y", "me", "mi", "dime", "dice", "dices", "puedes", "decir", "decirme", "por", "favor", "porfa",
+            "oye", "hola", "asistente", "hoy", "ahora", "ahorita", "actual", "actualmente", "tengo", "hay", "queda", "este",
+            "estamos", "tiene", "tienes", "le",
+        )
+        const val MAX_TOPIC_WORDS = 2
+
+        val HOUR = Regex("\\bhora\\b")
+        val YEAR = Regex("\\bano\\b")
+        val MONTH = Regex("\\bmes\\b")
     }
 
     /** ", señal buena" when the system reports a level; empty when it does not (older Android, or no value). */

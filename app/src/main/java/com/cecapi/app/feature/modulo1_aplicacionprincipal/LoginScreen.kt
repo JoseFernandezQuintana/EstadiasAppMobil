@@ -21,12 +21,12 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
-import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -69,6 +69,7 @@ import com.cecapi.app.core.ui.voiceHint
 fun LoginScreen(
     onLoginSuccess: () -> Unit,
     onNavigateToRegister: () -> Unit,
+    onBack: () -> Unit = {},
     viewModel: LoginViewModel = hiltViewModel(),
 ) {
     val context = LocalContext.current
@@ -84,6 +85,9 @@ fun LoginScreen(
     }
     LaunchedEffect(Unit) {
         viewModel.navigateToRegister.collect { onNavigateToRegister() }
+    }
+    LaunchedEffect(Unit) {
+        viewModel.back.collect { onBack() }
     }
 
     // Login stays alive under Register; only react to speech while it is actually showing.
@@ -119,6 +123,18 @@ fun LoginScreen(
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 24.dp, vertical = 32.dp),
     ) {
+        // Visible way back for someone navigating by touch, not only by voice ("atrás").
+        val backHelp = "Volver. Regresa a la pantalla anterior."
+        IconButton(
+            onClick = onBack,
+            modifier = Modifier
+                .size(48.dp)
+                .semantics { contentDescription = backHelp }
+                .voiceHint(backHelp),
+        ) {
+            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null, tint = CecapiAccent)
+        }
+
         Text(
             text = "Di \"usuario\" o \"contraseña\" para dictar cada dato, o escríbelos abajo",
             style = MaterialTheme.typography.bodyLarge,

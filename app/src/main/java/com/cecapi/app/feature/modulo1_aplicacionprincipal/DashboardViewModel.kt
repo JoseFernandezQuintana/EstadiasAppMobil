@@ -8,6 +8,7 @@ import com.cecapi.app.core.navigation.CecapiDestinations
 import com.cecapi.app.core.util.ConnectivityObserver
 import com.cecapi.app.core.util.PhoneStatusReader
 import com.cecapi.app.core.util.VolumeControl
+import com.cecapi.app.core.util.WikipediaLookup
 import com.cecapi.app.core.voice.AssistantPreferences
 import com.cecapi.app.core.voice.DeviceSettings
 import com.cecapi.app.core.voice.FeedbackCues
@@ -17,15 +18,14 @@ import com.cecapi.app.notifications.NotificationReader
 import com.cecapi.app.core.voice.VoiceEngine
 import com.cecapi.app.core.voice.VoiceMemory
 import com.cecapi.app.core.voice.VoiceState
+import com.cecapi.app.core.voice.VoiceText
 import com.cecapi.app.core.voice.WakeWordController
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
@@ -49,6 +49,7 @@ class DashboardViewModel @Inject constructor(
     private val intentFallback: IntentFallback,
     private val deviceSettings: DeviceSettings,
     private val connectivityObserver: ConnectivityObserver,
+    private val wikipediaLookup: WikipediaLookup,
     assistantPreferences: AssistantPreferences,
 ) : ViewModel() {
 
@@ -112,8 +113,35 @@ class DashboardViewModel @Inject constructor(
         }
     }
 
-    /** Handles "repite..." (again the last request, or the last answer); anything else is remembered and run. */
+    private enum class PendingConfirm { EXIT, LOGOUT }
+
+    private var pendingConfirm: PendingConfirm? = null
+    private var pendingConfirmAskedAt = 0L
+
+    /**
+     * Answers the "¿Cierro...? Di sí o no." question. Only for a short while, and only with a deliberate word:
+     * this can happen to anyone, including a child, so a word that also means something else in passing
+     * conversation ("va", "sale") must not count.
+     */
+    private fun handlePendingConfirm(text: String): Boolean {
+        val action = pendingConfirm ?: return false
+        pendingConfirm = null
+        if (System.currentTimeMillis() - pendingConfirmAskedAt > EXIT_CONFIRM_WINDOW_MS) return false
+        return when {
+            VoiceText.isNo(text) -> {
+                voiceEngine.speak("De acuerdo, no cierro nada.")
+                true
+            }
+            VoiceText.normalize(text).split(" ").any { it in EXIT_CONFIRM_WORDS } -> {
+                if (action == PendingConfirm.EXIT) exitApp() else onLogout()
+                true
+            }
+            else -> false
+        }
+    }
+
     private fun interpretCommand(text: String) {
+        if (handlePendingConfirm(text)) return
         when (voiceMemory.repeatKind(text)) {
             VoiceMemory.Repeat.RESPONSE ->
                 voiceEngine.speak(voiceEngine.lastSpoken ?: "Todavía no he dicho nada.")
@@ -129,10 +157,17 @@ class DashboardViewModel @Inject constructor(
     }
 
     private fun runCommand(text: String, allowFallback: Boolean = true) {
-        // "dime más": go deeper on the last thing the AI answered.
+        // "dime más": go deeper on the last thing the AI answered, or read the rest of a Wikipedia summary.
         intentFallback.deepQuestionFor(text)?.let { question ->
             askAi(question, deep = true)
             return
+        }
+        pendingWikiRest?.let { rest ->
+            if (intentFallback.wantsMore(text)) {
+                pendingWikiRest = null
+                voiceEngine.speak(rest, listenAfter = true)
+                return
+            }
         }
         phoneStatusReader.answer(text)?.let { status ->
             voiceEngine.speak(status)
@@ -150,12 +185,17 @@ class DashboardViewModel @Inject constructor(
             voiceEngine.speak(message)
             return
         }
+        // Leaving is hard to undo for someone who cannot see the screen, and a misheard word must not do it.
         if (SessionCommands.isExitApp(text)) {
-            exitApp()
+            pendingConfirm = PendingConfirm.EXIT
+            pendingConfirmAskedAt = System.currentTimeMillis()
+            voiceEngine.speak("¿Cierro la aplicación? Di sí, cerrar, o no.", listenAfter = true)
             return
         }
         if (SessionCommands.isLogout(text)) {
-            onLogout()
+            pendingConfirm = PendingConfirm.LOGOUT
+            pendingConfirmAskedAt = System.currentTimeMillis()
+            voiceEngine.speak("¿Cierro tu sesión? Di sí, cerrar, o no.", listenAfter = true)
             return
         }
         if (ModuleVoice.isListRequest(text)) {
@@ -182,10 +222,38 @@ class DashboardViewModel @Inject constructor(
      * internet, it gets one chance to turn the phrase into a command we know; otherwise we say so.
      */
     private fun notUnderstood(text: String, allowFallback: Boolean) {
-        if (allowFallback && intentFallback.resolver != null && isOnline.value) {
-            askAi(text, deep = false)
-        } else {
-            sayNotUnderstood()
+        val wikiQuery = wikiQuery(text)
+        when {
+            allowFallback && intentFallback.resolver != null && isOnline.value -> askAi(text, deep = false)
+            // The AI is off (its providers do not allow minors) or not connected yet: Wikipedia still helps
+            // with a plain "qué es / quién fue / busca..." when there is internet, without needing an account.
+            allowFallback && wikiQuery != null && isOnline.value -> askWikipedia(wikiQuery)
+            else -> sayNotUnderstood()
+        }
+    }
+
+    /** The part after "qué es", "quién fue", "busca"... in the words the person actually said (accents kept). */
+    private fun wikiQuery(text: String): String? {
+        val match = WIKI_TRIGGER.find(VoiceText.fold(text)) ?: return null
+        return text.substring(match.groups[1]!!.range.first).trim().takeIf { it.length >= 2 }
+    }
+
+    /** What to say after the current Wikipedia summary if the person says "dime más". */
+    private var pendingWikiRest: String? = null
+
+    private fun askWikipedia(query: String) {
+        voiceEngine.speak("Buscando en Wikipedia.")
+        viewModelScope.launch {
+            val result = runCatching { wikipediaLookup.search(query) }.getOrNull()
+            if (result == null) {
+                voiceEngine.speak("No encontré nada en Wikipedia sobre eso.")
+            } else {
+                pendingWikiRest = result.rest
+                voiceEngine.speak(
+                    result.short + if (result.rest != null) " Si quieres saber más, di dime más." else "",
+                    listenAfter = true,
+                )
+            }
         }
     }
 
@@ -249,6 +317,9 @@ class DashboardViewModel @Inject constructor(
             style.pick("Aquí tienes tu menú. Di menú para escucharlo.", "Aquí tiene su menú. Diga menú para escucharlo.")
     }
 
+    /** Two quick taps on the mic silence the assistant, for someone using touch with their hands instead of voice. */
+    fun onMicDoubleTap() = voiceEngine.mute()
+
     fun onMicTapped() {
         voiceEngine.startListening()
     }
@@ -283,6 +354,7 @@ class DashboardViewModel @Inject constructor(
             MenuItem.SETTINGS_KEY -> onSettingsSelected()
             MenuItem.CAMERA_KEY -> openRoute(CecapiDestinations.CAMERA_HUB, "Abriendo la cámara.")
             MenuItem.PERSONALIZATION_KEY -> openRoute(CecapiDestinations.PERSONALIZATION, "Abriendo la personalización.")
+            MenuItem.CHATS_KEY -> openRoute(CecapiDestinations.CHATS, "Abriendo los chats.")
             else -> ModuloCecapi.fromStorageCode(key)?.let(::onModuleSelected)
         }
     }
@@ -309,11 +381,18 @@ class DashboardViewModel @Inject constructor(
         }
     }
 
-    /** Called by the screen's own "Cerrar aplicación" chip. */
-    fun onExitRequested() = exitApp()
-
     private companion object {
         const val OFFLINE_NOTICE =
             "Ahora no tienes conexión a internet, así que mis respuestas pueden ser menos precisas."
+
+        const val EXIT_CONFIRM_WINDOW_MS = 30_000L
+        val EXIT_CONFIRM_WORDS = setOf("si", "cerrar", "cierra", "confirmo", "hazlo", "correcto")
+
+        // Matched against VoiceText.fold(text) — accents stripped, same length as the original — so the
+        // captured group's range lines up with the words the person actually said, accents and all.
+        val WIKI_TRIGGER = Regex(
+            "(?:busca(?:r)? en wikipedia|busca(?:r)?|informacion sobre|dime sobre|" +
+                "que es|quien es|quien fue|wikipedia)\\s+(.+)",
+        )
     }
 }

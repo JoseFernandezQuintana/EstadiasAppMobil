@@ -1,6 +1,7 @@
 package com.cecapi.app.feature.modulo1_aplicacionprincipal
 
 import android.content.Context
+import android.os.SystemClock
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
@@ -16,6 +17,10 @@ private val Context.loginAttemptsDataStore by preferencesDataStore(name = "login
  * Counts failed sign-ins on this device and locks sign-in after [MAX_FAILED_ATTEMPTS] misses.
  * It is stored on disk so closing and reopening the app does not reset the count.
  * There is no admin screen yet to unlock an account, so the lock simply expires after [LOCK_MS].
+ *
+ * The lock is timed with [SystemClock.elapsedRealtime], not the wall clock: the wall clock can be changed
+ * by anyone in the phone's own settings, which would let someone skip the wait by moving the date forward.
+ * elapsedRealtime cannot be set by the user; it only resets on a reboot, which is a much smaller loophole.
  */
 @Singleton
 class LoginAttemptsStore @Inject constructor(
@@ -23,8 +28,8 @@ class LoginAttemptsStore @Inject constructor(
 ) {
     /** Milliseconds left on the lock, or 0 if sign-in is allowed. */
     suspend fun lockRemainingMs(): Long {
-        val until = context.loginAttemptsDataStore.data.first()[KEY_LOCKED_UNTIL] ?: 0L
-        return (until - System.currentTimeMillis()).coerceAtLeast(0L)
+        val until = context.loginAttemptsDataStore.data.first()[KEY_LOCKED_UNTIL_ELAPSED] ?: 0L
+        return (until - SystemClock.elapsedRealtime()).coerceAtLeast(0L)
     }
 
     /** Records a failed attempt. Returns which failure this was (1..[MAX_FAILED_ATTEMPTS]). */
@@ -33,7 +38,7 @@ class LoginAttemptsStore @Inject constructor(
         context.loginAttemptsDataStore.edit { prefs ->
             failures = (prefs[KEY_FAILED] ?: 0) + 1
             if (failures >= MAX_FAILED_ATTEMPTS) {
-                prefs[KEY_LOCKED_UNTIL] = System.currentTimeMillis() + LOCK_MS
+                prefs[KEY_LOCKED_UNTIL_ELAPSED] = SystemClock.elapsedRealtime() + LOCK_MS
                 prefs[KEY_FAILED] = 0
             } else {
                 prefs[KEY_FAILED] = failures
@@ -45,7 +50,7 @@ class LoginAttemptsStore @Inject constructor(
     suspend fun reset() {
         context.loginAttemptsDataStore.edit {
             it[KEY_FAILED] = 0
-            it[KEY_LOCKED_UNTIL] = 0L
+            it[KEY_LOCKED_UNTIL_ELAPSED] = 0L
         }
     }
 
@@ -54,6 +59,6 @@ class LoginAttemptsStore @Inject constructor(
         const val LOCK_MS = 15 * 60 * 1000L
 
         private val KEY_FAILED = intPreferencesKey("failed_attempts")
-        private val KEY_LOCKED_UNTIL = longPreferencesKey("locked_until")
+        private val KEY_LOCKED_UNTIL_ELAPSED = longPreferencesKey("locked_until_elapsed")
     }
 }

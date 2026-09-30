@@ -18,6 +18,8 @@ object ModuleVoice {
     fun menu(available: Collection<ModuloCecapi>): List<MenuItem> = buildList {
         if (ModuloCecapi.LECTOR_DOCUMENTOS in available || ModuloCecapi.ASISTENTE_ENTORNO in available) add(MenuItem.Camera)
         if (ModuloCecapi.CENTRO_SOLICITUDES in available) add(ModuloCecapi.CENTRO_SOLICITUDES.toMenuItem())
+        if (ModuloCecapi.CENTRO_APRENDIZAJE in available) add(ModuloCecapi.CENTRO_APRENDIZAJE.toMenuItem())
+        add(MenuItem.Chats)
         add(MenuItem.Personalization)
         add(MenuItem.Settings)
     }
@@ -26,19 +28,21 @@ object ModuleVoice {
     private val keywords: List<Pair<String, List<String>>> = listOf(
         MenuItem.SETTINGS_KEY to listOf("configuracion", "ajustes"),
         MenuItem.PERSONALIZATION_KEY to listOf("personalizacion", "personalizar"),
+        MenuItem.CHATS_KEY to listOf("chats", "chat", "conversaciones", "historial"),
+        ModuloCecapi.CENTRO_APRENDIZAJE.storageCode to listOf("actividades", "actividad", "ejercicios", "entrenar", "entrenamiento"),
         MenuItem.CAMERA_KEY to listOf("camara", "lector"),
         ModuloCecapi.CENTRO_SOLICITUDES.storageCode to listOf("documentos", "solicitudes", "solicitud"),
     )
 
     fun isListRequest(spoken: String): Boolean {
         val text = VoiceText.normalize(spoken)
-        return listOf("modulos", "opciones", "menu").any { it in text }
+        return listOf("modulos", "opciones", "menu").let { phrases -> VoiceText.hasAny(text, phrases) }
     }
 
     /** The menu entry named in [spoken], or null. */
     fun matchKey(spoken: String, menu: List<MenuItem>): String? {
         val text = VoiceText.normalize(spoken)
-        return keywords.firstOrNull { (key, words) -> menu.any { it.key == key } && words.any { it in text } }?.first
+        return keywords.firstOrNull { (key, words) -> menu.any { it.key == key } && VoiceText.hasAny(text, words) }?.first
     }
 
     /**
@@ -48,8 +52,8 @@ object ModuleVoice {
     fun directCameraRoute(spoken: String): String? {
         val text = VoiceText.normalize(spoken)
         return when {
-            listOf("enfrente", "entorno", "describe", "descripcion").any { it in text } -> CecapiDestinations.ENVIRONMENT
-            listOf("leer texto", "lee este", "lee esto", "leer documento", "lee el texto").any { it in text } ->
+            listOf("enfrente", "entorno", "describe", "descripcion").let { phrases -> VoiceText.hasAny(text, phrases) } -> CecapiDestinations.ENVIRONMENT
+            listOf("leer texto", "lee este", "lee esto", "leer documento", "lee el texto").let { phrases -> VoiceText.hasAny(text, phrases) } ->
                 CecapiDestinations.DOCUMENT_READER
             else -> null
         }
