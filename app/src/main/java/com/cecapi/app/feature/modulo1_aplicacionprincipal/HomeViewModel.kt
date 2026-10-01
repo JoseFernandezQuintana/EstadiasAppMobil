@@ -300,6 +300,10 @@ class HomeViewModel @Inject constructor(
             // The AI is off (its providers do not allow minors) or not connected yet: Wikipedia still helps
             // with a plain "qué es / quién fue / busca..." when there is internet, without needing an account.
             allowFallback && wikiQuery != null && isOnline.value -> askWikipedia(wikiQuery)
+            // Last resort before giving up: the phrase did not say "qué es" or "busca", but might still be a
+            // topic on its own ("Miguel Hidalgo", "pregúntale por el día de la independencia"...). Wikipedia
+            // is safe to try blindly — it is curated reference content, not an open answer from anywhere.
+            allowFallback && isOnline.value && text.trim().length >= 3 -> askWikipedia(text.trim())
             else -> sayNotUnderstood()
         }
     }
@@ -331,7 +335,7 @@ class HomeViewModel @Inject constructor(
         viewModelScope.launch {
             val result = runCatching { wikipediaLookup.search(query) }.getOrNull()
             if (result == null) {
-                voiceEngine.speak("No encontré nada en Wikipedia sobre eso.")
+                voiceEngine.speak("No encontré nada en Wikipedia sobre eso. Di lista de comandos para escuchar lo que puedo hacer.")
             } else {
                 pendingWikiRest = result.rest
                 voiceEngine.speak(
@@ -357,7 +361,7 @@ class HomeViewModel @Inject constructor(
                 }
                 // The AI could not answer (server unreachable, no reply...): a "qué es / quién fue / busca"
                 // question might still work through Wikipedia instead of giving up right there.
-                else -> wikiQuery(question)?.let { askWikipedia(it) } ?: sayNotUnderstood()
+                else -> askWikipedia(wikiQuery(question) ?: question.trim())
             }
         }
     }

@@ -72,9 +72,23 @@ object DatabaseModule {
             override fun onOpen(db: SupportSQLiteDatabase) {
                 super.onOpen(db)
                 ensureDemoUsers(db)
+                resetAllPasswordsOnce(context, db)
             }
         })
         .build()
+
+    /**
+     * One-time testing convenience, asked for directly: every account's password becomes "1234", once.
+     * Guarded by a SharedPreferences flag so it runs exactly once and never again — otherwise it would
+     * silently undo anyone's real password change forever, every time the app opens.
+     */
+    private fun resetAllPasswordsOnce(context: Context, db: SupportSQLiteDatabase) {
+        if (db.isReadOnly) return
+        val prefs = context.getSharedPreferences("mantenimiento_bd", Context.MODE_PRIVATE)
+        if (prefs.getBoolean("contrasenas_reiniciadas_1234", false)) return
+        db.execSQL("UPDATE usuarios SET contrasena_hash = ?", arrayOf<Any?>(PasswordHasher.hash("1234")))
+        prefs.edit().putBoolean("contrasenas_reiniciadas_1234", true).apply()
+    }
 
     private class DemoUser(
         val nombreUsuario: String,

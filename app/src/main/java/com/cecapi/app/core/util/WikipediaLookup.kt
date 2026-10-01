@@ -2,7 +2,6 @@ package com.cecapi.app.core.util
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import org.json.JSONArray
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
@@ -17,8 +16,14 @@ data class WikipediaResult(val short: String, val rest: String?, val title: Stri
 /**
  * A second source of answers when there is internet but the AI is off (its providers do not allow minors,
  * so it stays off until Pp decides otherwise): Wikipedia in Spanish, which needs no key and no account.
- * Two calls, both documented, free endpoints: `action=opensearch` finds the closest article title for what
- * the person said, then the REST summary endpoint returns its first paragraph.
+ * The full-text search endpoint (`action=query&list=search`) finds the closest article for what the person
+ * said, then the REST summary endpoint returns its first paragraph.
+ *
+ * Earlier this used `action=opensearch`, which only matches the START of a title. Verified against the real
+ * API: "el día de la independencia" (how someone actually says it, with "el" in front) matched a wrong,
+ * unrelated article with opensearch, and "el humano" matched nothing at all — a spoken question almost
+ * never says a bare article title. Full-text search matches content, not just the title's first letters, so
+ * it finds a relevant article for both instead of a wrong one or nothing.
  */
 @Singleton
 class WikipediaLookup @Inject constructor() {
@@ -39,12 +44,11 @@ class WikipediaLookup @Inject constructor() {
     }
 
     private fun findTitle(query: String): String? {
-        val url = "https://es.wikipedia.org/w/api.php?action=opensearch&format=json&limit=1&namespace=0&search=" +
+        val url = "https://es.wikipedia.org/w/api.php?action=query&list=search&format=json&srlimit=1&srsearch=" +
             URLEncoder.encode(query, "UTF-8")
         val body = get(url) ?: return null
-        // ["query", ["Título encontrado"], [...], [...]]
-        val titles = JSONArray(body).optJSONArray(1) ?: return null
-        return titles.optString(0).takeIf { it.isNotBlank() }
+        val results = JSONObject(body).optJSONObject("query")?.optJSONArray("search") ?: return null
+        return results.optJSONObject(0)?.optString("title")?.takeIf { it.isNotBlank() }
     }
 
     private fun fetchSummary(title: String): String? {
