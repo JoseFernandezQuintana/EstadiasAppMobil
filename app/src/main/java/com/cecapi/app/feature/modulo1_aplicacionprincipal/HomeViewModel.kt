@@ -410,9 +410,17 @@ class HomeViewModel @Inject constructor(
 
         // Matched against VoiceText.fold(text) — accents stripped, same length as the original — so the
         // captured group's range lines up with the words the person actually said, accents and all.
+        // Las preguntas clave en español: qué, quién, cómo, cuándo, dónde, por qué, cuál, cuánto.
         val WIKI_TRIGGER = Regex(
-            "(?:busca(?:r)? en wikipedia|busca(?:r)?|informacion sobre|dime sobre|" +
-                "que es|quien es|quien fue|wikipedia)\\s+(.+)",
+            "(?:busca(?:r)? en wikipedia|busca(?:r)?|informacion sobre|dime sobre|wikipedia|" +
+                "que es|que son|que fue|que fueron|que significa|" +
+                "quien es|quien fue|quien son|quien era|" +
+                "como es|como funciona|como se hace|como surgio|" +
+                "cuando fue|cuando es|cuando ocurrio|cuando paso|cuando nacio|cuando murio|" +
+                "donde esta|donde queda|donde se encuentra|donde nacio|" +
+                "por que|porque|" +
+                "cual es|cuales son|" +
+                "cuanto es|cuanto vale|cuanto mide|cuanto pesa|cuanto cuesta)\\s+(.+)",
         )
 
         // "llámate Luna", "quisiera llamarte Luna", "quiero que te llames Luna", "te llamas Luna",
