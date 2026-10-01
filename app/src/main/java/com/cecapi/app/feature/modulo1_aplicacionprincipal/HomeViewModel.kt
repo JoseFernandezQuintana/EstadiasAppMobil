@@ -335,7 +335,9 @@ class HomeViewModel @Inject constructor(
                     intentFallback.lastQuestion = question
                     voiceEngine.speak(answer + if (reply.hasMore) " Si quieres saber más, di dime más." else "")
                 }
-                else -> sayNotUnderstood()
+                // The AI could not answer (server unreachable, no reply...): a "qué es / quién fue / busca"
+                // question might still work through Wikipedia instead of giving up right there.
+                else -> wikiQuery(question)?.let { askWikipedia(it) } ?: sayNotUnderstood()
             }
         }
     }
