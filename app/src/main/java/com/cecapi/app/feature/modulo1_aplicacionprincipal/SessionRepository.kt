@@ -1,12 +1,22 @@
 package com.cecapi.app.feature.modulo1_aplicacionprincipal
 
+import android.content.Context
+import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.longPreferencesKey
+import androidx.datastore.preferences.preferencesDataStore
 import com.cecapi.app.core.data.AccountEraser
 import com.cecapi.app.core.model.ModuloCecapi
 import com.cecapi.app.core.util.PasswordHasher
 import com.cecapi.app.core.voice.VoiceEngine
+import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -20,8 +30,11 @@ sealed interface RegisterResult {
     data object UsernameTaken : RegisterResult
 }
 
+private val Context.sessionStore by preferencesDataStore(name = "remembered_session")
+
 @Singleton
 class SessionRepository @Inject constructor(
+    @ApplicationContext private val context: Context,
     private val usuarioDao: UsuarioDao,
     private val permisosModuloDao: PermisosModuloDao,
     private val configuracionUsuarioDao: ConfiguracionUsuarioDao,
@@ -30,6 +43,21 @@ class SessionRepository @Inject constructor(
 ) {
     private val _currentUser = MutableStateFlow<UsuarioEntity?>(null)
     val currentUser: StateFlow<UsuarioEntity?> = _currentUser.asStateFlow()
+
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+
+    init {
+        // Opening the app from the same device it was used on before signs the person straight in,
+        // without asking for the password again — the phone's own lock screen is the security boundary,
+        // the same trade-off every app that "stays signed in" makes. Cleared the moment they log out.
+        scope.launch { restoreRememberedSession() }
+    }
+
+    private suspend fun restoreRememberedSession() {
+        val rememberedId = context.sessionStore.data.first()[KEY_REMEMBERED_USER_ID] ?: return
+        val usuario = usuarioDao.findById(rememberedId) ?: return
+        _currentUser.value = usuario
+    }
 
     suspend fun login(nombreUsuario: String, contrasena: String): LoginResult {
         val usuario = usuarioDao.findByUsername(nombreUsuario.trim())
@@ -67,6 +95,7 @@ class SessionRepository @Inject constructor(
     fun logout() {
         _currentUser.value = null
         logoutNoticePending = true
+        scope.launch { context.sessionStore.edit { it.remove(KEY_REMEMBERED_USER_ID) } }
     }
 
     /** Deletes the signed-in person's account and all their data, then signs out. False when nobody is signed in. */
@@ -88,6 +117,7 @@ class SessionRepository @Inject constructor(
         // older accounts and the database schema stay intact.
         ensureDefaultConfiguracion(usuario.id)
         _currentUser.value = usuario
+        context.sessionStore.edit { it[KEY_REMEMBERED_USER_ID] = usuario.id }
     }
 
     /** First login for a user: grant access to all six functional modules by default. */
@@ -105,5 +135,9 @@ class SessionRepository @Inject constructor(
         val nueva = ConfiguracionUsuarioEntity(usuarioId = usuarioId)
         configuracionUsuarioDao.upsert(nueva)
         return nueva
+    }
+
+    private companion object {
+        val KEY_REMEMBERED_USER_ID = longPreferencesKey("remembered_user_id")
     }
 }

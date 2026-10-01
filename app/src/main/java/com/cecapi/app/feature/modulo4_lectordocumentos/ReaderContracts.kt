@@ -6,9 +6,9 @@ package com.cecapi.app.feature.modulo4_lectordocumentos
  */
 sealed class OcrOutcome {
 
-    /** Se reconoció texto y el documento quedó guardado. */
+    /** Se reconoció texto. [documentoId] es null cuando nadie inició sesión: se lee, pero no se guarda. */
     data class Exito(
-        val documentoId: Long,
+        val documentoId: Long?,
         val parrafos: List<String>,
     ) : OcrOutcome() {
         val textoCompleto: String get() = parrafos.joinToString("\n\n")

@@ -8,7 +8,6 @@ import com.cecapi.app.core.ui.GALLERY_WORDS
 import com.cecapi.app.core.util.StorageReport
 import com.cecapi.app.core.voice.FeedbackCues
 import com.cecapi.app.core.voice.VoiceEngine
-import com.cecapi.app.core.voice.VoiceMessages
 import com.cecapi.app.core.voice.VoiceState
 import com.cecapi.app.core.voice.VoiceText
 import com.cecapi.app.feature.modulo1_aplicacionprincipal.CommandCatalog
@@ -99,13 +98,8 @@ class EnvironmentViewModel @Inject constructor(
         }
     }
 
-    /** Descriptions are saved to the person's history, so a signed-in user is needed. */
-    private fun sesionIniciada(): Boolean {
-        if (sessionRepository.currentUser.value == null) {
-            voiceEngine.speak(VoiceMessages.NEEDS_LOGIN)
-            return false
-        }
-        // Every photo is kept on the phone, so with almost no room left it is better to say so than to fill it.
+    /** Every photo is kept on the phone, so with almost no room left it is better to say so than to fill it. */
+    private fun hayEspacio(): Boolean {
         if (storageReport.criticallyLow()) {
             cues.play(FeedbackCues.Cue.WARNING)
             voiceEngine.speak(
@@ -119,7 +113,7 @@ class EnvironmentViewModel @Inject constructor(
 
     /** Also what the on-screen button and the "qué hay enfrente" chip call. */
     fun pedirCaptura() {
-        if (_uiState.value.isProcessing || !sesionIniciada()) return
+        if (_uiState.value.isProcessing || !hayEspacio()) return
         _captureRequests.tryEmit(Unit)
     }
 
@@ -145,7 +139,7 @@ class EnvironmentViewModel @Inject constructor(
      * that one; there is no permission to the whole gallery. Said out loud first so it is always their decision.
      */
     fun pedirGaleria() {
-        if (_uiState.value.isProcessing || !sesionIniciada()) return
+        if (_uiState.value.isProcessing || !hayEspacio()) return
         voiceEngine.speak("Voy a abrir tus fotos. Elige la imagen que quieres que describa; solo veré esa.")
         _pickRequests.tryEmit(Unit)
     }
@@ -167,15 +161,13 @@ class EnvironmentViewModel @Inject constructor(
     }
 
     fun onPhotoCaptured(imageUri: Uri, rutaImagen: String) {
-        val usuario = sessionRepository.currentUser.value ?: run {
-            // Nobody signed in: say so instead of ignoring the user in silence.
-            voiceEngine.speak(VoiceMessages.NEEDS_LOGIN)
-            return
-        }
+        // The camera is free for anyone: with nobody signed in, the description is still said out loud, it
+        // just is not saved to a history (processCapturedPhoto skips saving when usuarioId is null).
+        val usuarioId = sessionRepository.currentUser.value?.id
         _uiState.value = EnvironmentUiState(isProcessing = true, photoPath = rutaImagen)
         voiceEngine.speak("Analizando el entorno.")
         viewModelScope.launch {
-            repository.processCapturedPhoto(usuario.id, imageUri, rutaImagen)
+            repository.processCapturedPhoto(usuarioId, imageUri, rutaImagen)
                 .onSuccess { result ->
                     _uiState.value = EnvironmentUiState(descripcion = result.descripcion, photoPath = rutaImagen)
                     voiceEngine.speak(result.descripcion)

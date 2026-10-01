@@ -9,7 +9,6 @@ import com.cecapi.app.core.util.StorageReport
 import com.cecapi.app.core.voice.AssistantMode
 import com.cecapi.app.core.voice.FeedbackCues
 import com.cecapi.app.core.voice.VoiceEngine
-import com.cecapi.app.core.voice.VoiceMessages
 import com.cecapi.app.core.voice.VoiceState
 import com.cecapi.app.core.voice.VoiceText
 import com.cecapi.app.feature.modulo1_aplicacionprincipal.CommandCatalog
@@ -123,15 +122,6 @@ class DocumentReaderViewModel @Inject constructor(
         }
     }
 
-    /** Reading needs a signed-in person because every document is saved to their history. */
-    private fun sesionIniciada(): Boolean {
-        if (sessionRepository.currentUser.value == null) {
-            voiceEngine.speak(VoiceMessages.NEEDS_LOGIN)
-            return false
-        }
-        return hayEspacio()
-    }
-
     /** Every photo is kept on the phone, so with almost no room left it is better to say so than to fill it. */
     private fun hayEspacio(): Boolean {
         if (!storageReport.criticallyLow()) return true
@@ -153,7 +143,7 @@ class DocumentReaderViewModel @Inject constructor(
             _uiState.value = _uiState.value.copy(capturaArmada = false)
             return true
         }
-        if (!sesionIniciada()) return false
+        if (!hayEspacio()) return false
         _uiState.value = _uiState.value.copy(capturaArmada = true)
         voiceEngine.speak("Vas a tomar una foto del documento. Toca otra vez para capturarla.")
         return false
@@ -161,7 +151,7 @@ class DocumentReaderViewModel @Inject constructor(
 
     /** "Toma la foto" by voice: no second tap needed, the person already meant it. */
     fun pedirCaptura() {
-        if (_uiState.value.isProcessing || !sesionIniciada()) return
+        if (_uiState.value.isProcessing || !hayEspacio()) return
         detenerLectura()
         _captureRequests.tryEmit(Unit)
     }
@@ -175,7 +165,7 @@ class DocumentReaderViewModel @Inject constructor(
      * that one; there is no permission to the whole gallery. Said out loud first so it is always their decision.
      */
     fun pedirGaleria() {
-        if (_uiState.value.isProcessing || !sesionIniciada()) return
+        if (_uiState.value.isProcessing || !hayEspacio()) return
         detenerLectura()
         voiceEngine.speak("Voy a abrir tus fotos. Elige la imagen que quieres que lea; solo veré esa.")
         _pickRequests.tryEmit(Unit)
@@ -198,11 +188,9 @@ class DocumentReaderViewModel @Inject constructor(
     }
 
     fun onPhotoCaptured(imageUri: Uri, rutaImagen: String) {
-        val usuario = sessionRepository.currentUser.value ?: run {
-            // Nobody signed in: say so instead of ignoring the user in silence.
-            voiceEngine.speak(VoiceMessages.NEEDS_LOGIN)
-            return
-        }
+        // The camera is free for anyone: with nobody signed in, the text is still read out loud, it just
+        // is not saved to a history (processCapturedPhoto skips saving when usuarioId is null).
+        val usuarioId = sessionRepository.currentUser.value?.id
         _uiState.value = _uiState.value.copy(
             isProcessing = true,
             errorMessage = null,
@@ -212,7 +200,7 @@ class DocumentReaderViewModel @Inject constructor(
         )
         voiceEngine.speak("Procesando la imagen.")
         viewModelScope.launch {
-            when (val outcome = repository.processCapturedPhoto(usuario.id, imageUri, rutaImagen)) {
+            when (val outcome = repository.processCapturedPhoto(usuarioId, imageUri, rutaImagen)) {
                 is OcrOutcome.Exito -> {
                     _uiState.value = DocumentReaderUiState(
                         documentoId = outcome.documentoId,

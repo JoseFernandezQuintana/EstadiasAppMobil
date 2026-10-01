@@ -23,7 +23,7 @@ import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
 
-data class EnvironmentResult(val escaneoId: Long, val descripcion: String, val etiquetas: List<String>)
+data class EnvironmentResult(val escaneoId: Long?, val descripcion: String, val etiquetas: List<String>)
 
 /** Un objeto ya nombrado en español, con su color y dónde está en la foto. */
 private data class ObjetoDescrito(
@@ -75,7 +75,11 @@ class EnvironmentRepository @Inject constructor(
 
     fun observeRecent(usuarioId: Long): Flow<List<EscaneoEntornoEntity>> = escaneoDao.observeRecent(usuarioId)
 
-    suspend fun processCapturedPhoto(usuarioId: Long, imageUri: Uri, rutaImagen: String): Result<EnvironmentResult> {
+    /**
+     * The camera is free for anyone: with no [usuarioId] (nobody signed in) the description is still said
+     * out loud, it just is not saved to a history that would have nowhere to belong.
+     */
+    suspend fun processCapturedPhoto(usuarioId: Long?, imageUri: Uri, rutaImagen: String): Result<EnvironmentResult> {
         return try {
             val inicio = SystemClock.elapsedRealtime()
 
@@ -124,19 +128,22 @@ class EnvironmentRepository @Inject constructor(
 
             bitmap.recycle()
 
-            val escaneoId = escaneoDao.insert(EscaneoEntornoEntity(usuarioId = usuarioId, rutaImagen = rutaImagen))
-            if (finales.isNotEmpty()) {
-                objetoDao.insertAll(
-                    finales.map {
-                        ObjetoDetectadoEntity(
-                            escaneoId = escaneoId,
-                            etiqueta = it.etiqueta,
-                            confianza = it.confianza,
-                        )
-                    },
-                )
+            val escaneoId = usuarioId?.let { id ->
+                val nuevoId = escaneoDao.insert(EscaneoEntornoEntity(usuarioId = id, rutaImagen = rutaImagen))
+                if (finales.isNotEmpty()) {
+                    objetoDao.insertAll(
+                        finales.map {
+                            ObjetoDetectadoEntity(
+                                escaneoId = nuevoId,
+                                etiqueta = it.etiqueta,
+                                confianza = it.confianza,
+                            )
+                        },
+                    )
+                }
+                descripcionDao.insert(DescripcionEntornoEntity(escaneoId = nuevoId, textoDescripcion = descripcion))
+                nuevoId
             }
-            descripcionDao.insert(DescripcionEntornoEntity(escaneoId = escaneoId, textoDescripcion = descripcion))
 
             Log.d(TAG, "Descripción lista en ${SystemClock.elapsedRealtime() - inicio} ms: $descripcion")
 

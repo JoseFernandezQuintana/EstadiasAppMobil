@@ -25,10 +25,11 @@ class DocumentReaderRepository @Inject constructor(
     fun observeRecent(usuarioId: Long): Flow<List<DocumentoEscaneadoEntity>> = documentoDao.observeRecent(usuarioId)
 
     /**
-     * Runs on-device OCR on the captured photo and persists the document + extracted text.
-     * Rejects the photo before running ML Kit if it looks too dark or too blurry to read.
+     * Runs on-device OCR on the captured photo. The camera is free for anyone: with no [usuarioId] (nobody
+     * signed in) the text is still read out loud, it just is not saved to a history that would have nowhere
+     * to belong. Rejects the photo before running ML Kit if it looks too dark or too blurry to read.
      */
-    suspend fun processCapturedPhoto(usuarioId: Long, imageUri: Uri, rutaImagen: String): OcrOutcome {
+    suspend fun processCapturedPhoto(usuarioId: Long?, imageUri: Uri, rutaImagen: String): OcrOutcome {
         // A rejected or failed photo is never written to the database, so nothing would ever delete it from
         // disk on its own (not "libera espacio", not "borrar mi cuenta"). Clean it up right here instead.
         return try {
@@ -53,12 +54,13 @@ class DocumentReaderRepository @Inject constructor(
                 return reject(rutaImagen, OcrOutcome.SinTexto)
             }
 
-            val documentoId = documentoDao.insert(
-                DocumentoEscaneadoEntity(usuarioId = usuarioId, rutaImagen = rutaImagen),
-            )
-            textoDao.insert(
-                TextoExtraidoEntity(documentoId = documentoId, textoCompleto = parrafos.joinToString("\n\n")),
-            )
+            val documentoId = usuarioId?.let { id ->
+                val nuevoId = documentoDao.insert(DocumentoEscaneadoEntity(usuarioId = id, rutaImagen = rutaImagen))
+                textoDao.insert(
+                    TextoExtraidoEntity(documentoId = nuevoId, textoCompleto = parrafos.joinToString("\n\n")),
+                )
+                nuevoId
+            }
             OcrOutcome.Exito(documentoId, parrafos)
         } catch (e: Exception) {
             reject(rutaImagen, OcrOutcome.Error(e))
@@ -70,7 +72,8 @@ class DocumentReaderRepository @Inject constructor(
         return outcome
     }
 
-    suspend fun logLectura(documentoId: Long) {
+    suspend fun logLectura(documentoId: Long?) {
+        if (documentoId == null) return // nothing was saved for an anonymous reading, so there is nothing to log
         historialDao.insert(HistorialLecturaEntity(documentoId = documentoId))
     }
 
