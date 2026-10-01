@@ -32,6 +32,8 @@ import com.cecapi.app.feature.modulo6_aprendizaje.ResultadoEjercicioDao
 import com.cecapi.app.feature.modulo6_aprendizaje.ResultadoEjercicioEntity
 import com.cecapi.app.feature.modulo1_aplicacionprincipal.ConfiguracionUsuarioDao
 import com.cecapi.app.feature.modulo1_aplicacionprincipal.ConfiguracionUsuarioEntity
+import com.cecapi.app.feature.modulo1_aplicacionprincipal.IncidenciaDao
+import com.cecapi.app.feature.modulo1_aplicacionprincipal.IncidenciaEntity
 import com.cecapi.app.feature.modulo1_aplicacionprincipal.PermisosModuloDao
 import com.cecapi.app.feature.modulo1_aplicacionprincipal.PermisosModuloEntity
 import com.cecapi.app.feature.modulo1_aplicacionprincipal.UsuarioDao
@@ -56,6 +58,7 @@ import com.cecapi.app.feature.modulo2_asistentevoz.RespuestaAuditivaEntity
         UsuarioEntity::class,
         ConfiguracionUsuarioEntity::class,
         PermisosModuloEntity::class,
+        IncidenciaEntity::class,
         // Módulo 2 — Asistente de Voz
         ComandoVozEntity::class,
         HistorialComandoEntity::class,
@@ -83,13 +86,14 @@ import com.cecapi.app.feature.modulo2_asistentevoz.RespuestaAuditivaEntity
         ObjetoDetectadoEntity::class,
         DescripcionEntornoEntity::class,
     ],
-    version = 4,
+    version = 5,
     exportSchema = false,
 )
 abstract class AppDatabase : RoomDatabase() {
     abstract fun usuarioDao(): UsuarioDao
     abstract fun configuracionUsuarioDao(): ConfiguracionUsuarioDao
     abstract fun permisosModuloDao(): PermisosModuloDao
+    abstract fun incidenciaDao(): IncidenciaDao
 
     abstract fun comandoVozDao(): ComandoVozDao
     abstract fun historialComandoDao(): HistorialComandoDao

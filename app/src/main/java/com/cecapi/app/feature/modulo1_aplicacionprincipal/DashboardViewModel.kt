@@ -205,6 +205,12 @@ class DashboardViewModel @Inject constructor(
             onGestionSelected()
             return
         }
+        if (esAlumnoOUsuario() &&
+            VoiceText.hasAny(VoiceText.normalize(text), "ayuda y soporte", "soporte", "mi educador", "reportar un problema")
+        ) {
+            onSoporteSelected()
+            return
+        }
         if (ModuleVoice.isListRequest(text)) {
             voiceEngine.speak(ModuleVoice.spokenList(menu.value))
             return
@@ -386,6 +392,18 @@ class DashboardViewModel @Inject constructor(
     private fun puedeGestionar(): Boolean {
         val rol = currentUser.value?.rol?.let(RolUsuario::fromCodigo) ?: return false
         return rol == RolUsuario.ADMINISTRADOR || rol == RolUsuario.DIRECTIVO || rol == RolUsuario.EDUCADOR
+    }
+
+    /** Only alumno and usuario ever see the button that calls this — the opposite of Gestión. */
+    fun onSoporteSelected() {
+        cues.play(FeedbackCues.Cue.NAVIGATE)
+        voiceEngine.speak("Abriendo ayuda.")
+        _navEvents.tryEmit(CecapiDestinations.SOPORTE)
+    }
+
+    private fun esAlumnoOUsuario(): Boolean {
+        val rol = currentUser.value?.rol?.let(RolUsuario::fromCodigo) ?: return false
+        return rol == RolUsuario.ALUMNO || rol == RolUsuario.USUARIO
     }
 
     /** A card of the main menu was tapped (or named out loud). */

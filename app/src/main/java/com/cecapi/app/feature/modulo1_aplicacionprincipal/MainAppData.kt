@@ -157,3 +157,56 @@ interface PermisosModuloDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(permisos: List<PermisosModuloEntity>)
 }
+
+/**
+ * A problem reported with the app or with someone from the institution (alumno), or with no institution
+ * at all (usuario independiente). [destinoOrigen] is where it should be read: an institution's name, or
+ * null when the reporter has none — then it goes straight to the administradores instead of being lost,
+ * per [com.cecapi.app.feature.modulo1_aplicacionprincipal.RolePermissions.destinoDeIncidencia].
+ */
+@Entity(
+    tableName = "incidencias",
+    foreignKeys = [
+        ForeignKey(
+            entity = UsuarioEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["reportante_id"],
+            onDelete = ForeignKey.CASCADE,
+        ),
+    ],
+    indices = [Index("reportante_id"), Index("destino_origen")],
+)
+data class IncidenciaEntity(
+    @PrimaryKey(autoGenerate = true)
+    val id: Long = 0,
+    @ColumnInfo(name = "reportante_id")
+    val reportanteId: Long,
+    @ColumnInfo(name = "destino_origen")
+    val destinoOrigen: String?,
+    @ColumnInfo(name = "mensaje")
+    val mensaje: String,
+    @ColumnInfo(name = "fecha_reporte")
+    val fechaReporte: Long = System.currentTimeMillis(),
+    @ColumnInfo(name = "resuelta")
+    val resuelta: Boolean = false,
+)
+
+@Dao
+interface IncidenciaDao {
+    @Insert
+    suspend fun insert(incidencia: IncidenciaEntity): Long
+
+    @Query("SELECT * FROM incidencias WHERE reportante_id = :usuarioId ORDER BY fecha_reporte DESC")
+    fun observeDeReportante(usuarioId: Long): Flow<List<IncidenciaEntity>>
+
+    /** For a directivo/educador's institution. */
+    @Query("SELECT * FROM incidencias WHERE destino_origen = :origen COLLATE NOCASE ORDER BY fecha_reporte DESC")
+    fun observeDeInstitucion(origen: String): Flow<List<IncidenciaEntity>>
+
+    /** For an administrador: everyone's — both the institutions' and the independent usuarios' with no origen. */
+    @Query("SELECT * FROM incidencias ORDER BY fecha_reporte DESC")
+    fun observeTodas(): Flow<List<IncidenciaEntity>>
+
+    @Query("UPDATE incidencias SET resuelta = 1 WHERE id = :id")
+    suspend fun marcarResuelta(id: Long)
+}

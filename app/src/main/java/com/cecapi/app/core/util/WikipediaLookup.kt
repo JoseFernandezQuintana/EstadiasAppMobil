@@ -31,14 +31,19 @@ class WikipediaLookup @Inject constructor() {
 
     suspend fun search(query: String): WikipediaResult? = withContext(Dispatchers.IO) {
         try {
-            val title = findTitle(query) ?: return@withContext null
-            val extract = fetchSummary(title) ?: return@withContext null
-            val cut = cutAtSentence(extract, SHORT_ANSWER_CHARS)
-            WikipediaResult(
-                short = cut,
-                rest = extract.substring(cut.length).trim().ifBlank { null },
-                title = title,
-            )
+            // Tries each candidate title in order — not just the top one — because the best text match is
+            // sometimes a disambiguation page ("¿cuál de estos?"), which fetchSummary skips. Giving up right
+            // there threw away a perfectly good second or third result for no reason.
+            for (title in findTitles(query)) {
+                val extract = fetchSummary(title) ?: continue
+                val cut = cutAtSentence(extract, SHORT_ANSWER_CHARS)
+                return@withContext WikipediaResult(
+                    short = cut,
+                    rest = extract.substring(cut.length).trim().ifBlank { null },
+                    title = title,
+                )
+            }
+            null
         } catch (e: Exception) {
             // Not asserted on since this already returns null to the person either way; this only exists so
             // the next time every query comes back empty, logcat says why instead of leaving us to guess
@@ -48,20 +53,22 @@ class WikipediaLookup @Inject constructor() {
         }
     }
 
-    private fun findTitle(query: String): String? {
-        val url = "https://es.wikipedia.org/w/api.php?action=query&list=search&format=json&srlimit=1&srsearch=" +
+    private fun findTitles(query: String): List<String> {
+        val url = "https://es.wikipedia.org/w/api.php?action=query&list=search&format=json&srlimit=$CANDIDATE_TITLES&srsearch=" +
             URLEncoder.encode(query, "UTF-8")
-        val body = get(url) ?: return null
+        val body = get(url) ?: return emptyList()
         val results = JSONObject(body).optJSONObject("query")?.optJSONArray("search")
         if (results == null) {
-            Log.w(TAG, "findTitle(\"$query\"): unexpected response shape: $body")
-            return null
+            Log.w(TAG, "findTitles(\"$query\"): unexpected response shape: $body")
+            return emptyList()
         }
         if (results.length() == 0) {
-            Log.d(TAG, "findTitle(\"$query\"): Wikipedia returned zero results")
-            return null
+            Log.d(TAG, "findTitles(\"$query\"): Wikipedia returned zero results")
+            return emptyList()
         }
-        return results.optJSONObject(0)?.optString("title")?.takeIf { it.isNotBlank() }
+        return (0 until results.length()).mapNotNull { i ->
+            results.optJSONObject(i)?.optString("title")?.takeIf { it.isNotBlank() }
+        }
     }
 
     private fun fetchSummary(title: String): String? {
@@ -101,5 +108,8 @@ class WikipediaLookup @Inject constructor() {
     private companion object {
         const val TAG = "WikipediaLookup"
         const val SHORT_ANSWER_CHARS = 220
+
+        /** How many search results to try, in order, before giving up (not just the top one). */
+        const val CANDIDATE_TITLES = 3
     }
 }

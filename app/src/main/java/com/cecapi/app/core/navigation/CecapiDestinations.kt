@@ -22,4 +22,7 @@ object CecapiDestinations {
 
     /** Only for administrador, directivo and educador — never shown or reachable for alumno/usuario. */
     const val GESTION = "gestion"
+
+    /** Only for alumno and usuario — the opposite of GESTION: see their educador, report a problem. */
+    const val SOPORTE = "soporte"
 }

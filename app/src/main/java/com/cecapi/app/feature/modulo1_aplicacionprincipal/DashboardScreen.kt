@@ -20,6 +20,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Logout
+import androidx.compose.material.icons.automirrored.filled.Help
 import androidx.compose.material.icons.filled.AdminPanelSettings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -221,6 +222,37 @@ fun DashboardScreen(
                 Icon(Icons.Filled.AdminPanelSettings, contentDescription = null, tint = CecapiAccent)
                 Text(
                     "Gestión",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = CecapiAccent,
+                    modifier = Modifier.padding(start = 10.dp),
+                )
+            }
+        } else if (rol == RolUsuario.ALUMNO || rol == RolUsuario.USUARIO) {
+            // El opuesto de Gestión: solo para alumno y usuario independiente.
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp, vertical = 8.dp)
+                    .heightIn(min = 56.dp)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(CecapiSurfaceElevated)
+                    .border(1.dp, CecapiAccent.copy(alpha = 0.4f), RoundedCornerShape(16.dp))
+                    .clickable(onClick = viewModel::onSoporteSelected)
+                    .semantics { contentDescription = "Ayuda y soporte. Toca dos veces para abrir." }
+                    .voiceHint(
+                        if (rol == RolUsuario.ALUMNO) {
+                            "Ayuda y soporte. Ve quién es tu educador, o reporta un problema."
+                        } else {
+                            "Ayuda y soporte. Reporta un problema con la aplicación."
+                        },
+                    )
+                    .padding(horizontal = 16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center,
+            ) {
+                Icon(Icons.AutoMirrored.Filled.Help, contentDescription = null, tint = CecapiAccent)
+                Text(
+                    "Ayuda y soporte",
                     style = MaterialTheme.typography.titleMedium,
                     color = CecapiAccent,
                     modifier = Modifier.padding(start = 10.dp),

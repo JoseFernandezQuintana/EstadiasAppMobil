@@ -9,6 +9,7 @@ import com.cecapi.app.core.data.AppDatabase
 import com.cecapi.app.core.data.MIGRATION_1_2
 import com.cecapi.app.core.data.MIGRATION_2_3
 import com.cecapi.app.core.data.MIGRATION_3_4
+import com.cecapi.app.core.data.MIGRATION_4_5
 import com.cecapi.app.core.util.PasswordHasher
 import com.cecapi.app.feature.modulo3_asistenteinteligente.ConsultaIaDao
 import com.cecapi.app.feature.modulo3_asistenteinteligente.ContextoConversacionDao
@@ -25,6 +26,7 @@ import com.cecapi.app.feature.modulo6_aprendizaje.ResultadoVibracionDao
 import com.cecapi.app.feature.modulo6_aprendizaje.NivelAprendizajeDao
 import com.cecapi.app.feature.modulo6_aprendizaje.ResultadoEjercicioDao
 import com.cecapi.app.feature.modulo1_aplicacionprincipal.ConfiguracionUsuarioDao
+import com.cecapi.app.feature.modulo1_aplicacionprincipal.IncidenciaDao
 import com.cecapi.app.feature.modulo1_aplicacionprincipal.PermisosModuloDao
 import com.cecapi.app.feature.modulo1_aplicacionprincipal.RolUsuario
 import com.cecapi.app.feature.modulo1_aplicacionprincipal.UsuarioDao
@@ -57,7 +59,7 @@ object DatabaseModule {
         @ApplicationContext context: Context,
         databaseProvider: Provider<AppDatabase>,
     ): AppDatabase = Room.databaseBuilder(context, AppDatabase::class.java, "cecapi.db")
-        .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+        .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
         .addCallback(object : androidx.room.RoomDatabase.Callback() {
             override fun onCreate(db: SupportSQLiteDatabase) {
                 super.onCreate(db)
@@ -179,6 +181,9 @@ object DatabaseModule {
 
     @Provides
     fun providePermisosModuloDao(db: AppDatabase): PermisosModuloDao = db.permisosModuloDao()
+
+    @Provides
+    fun provideIncidenciaDao(db: AppDatabase): IncidenciaDao = db.incidenciaDao()
 
     @Provides
     fun provideComandoVozDao(db: AppDatabase): ComandoVozDao = db.comandoVozDao()

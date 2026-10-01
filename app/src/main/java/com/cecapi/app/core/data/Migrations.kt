@@ -58,3 +58,18 @@ val MIGRATION_3_4 = object : Migration(3, 4) {
         db.execSQL("ALTER TABLE usuarios ADD COLUMN educador_id INTEGER")
     }
 }
+
+/** v5: a simple way for an alumno or an independent usuario to report a problem. */
+val MIGRATION_4_5 = object : Migration(4, 5) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS incidencias (" +
+                "id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                "reportante_id INTEGER NOT NULL, destino_origen TEXT, mensaje TEXT NOT NULL, " +
+                "fecha_reporte INTEGER NOT NULL, resuelta INTEGER NOT NULL DEFAULT 0, " +
+                "FOREIGN KEY(reportante_id) REFERENCES usuarios(id) ON UPDATE NO ACTION ON DELETE CASCADE)",
+        )
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_incidencias_reportante_id ON incidencias (reportante_id)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_incidencias_destino_origen ON incidencias (destino_origen)")
+    }
+}
