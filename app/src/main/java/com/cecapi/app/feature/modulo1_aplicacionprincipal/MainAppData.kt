@@ -51,6 +51,9 @@ data class UsuarioEntity(
      * and always null for every other role — an educador, directivo or usuario has no "own teacher". */
     @ColumnInfo(name = "educador_id")
     val educadorId: Long? = null,
+    /** Shown on the ranking instead of the real name — chosen by the person, null until they set one. */
+    @ColumnInfo(name = "apodo")
+    val apodo: String? = null,
 )
 
 @Entity(
@@ -126,6 +129,9 @@ interface UsuarioDao {
 
     @Query("UPDATE usuarios SET rol = :rol WHERE id = :usuarioId")
     suspend fun cambiarRol(usuarioId: Long, rol: String)
+
+    @Query("UPDATE usuarios SET apodo = :apodo WHERE id = :usuarioId")
+    suspend fun actualizarApodo(usuarioId: Long, apodo: String?)
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insert(usuario: UsuarioEntity): Long

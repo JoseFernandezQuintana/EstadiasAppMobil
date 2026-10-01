@@ -18,6 +18,7 @@ import com.cecapi.app.feature.modulo1_aplicacionprincipal.CameraHubScreen
 import com.cecapi.app.feature.modulo1_aplicacionprincipal.ChatsScreen
 import com.cecapi.app.feature.modulo1_aplicacionprincipal.GestionScreen
 import com.cecapi.app.feature.modulo1_aplicacionprincipal.PersonalizationScreen
+import com.cecapi.app.feature.modulo1_aplicacionprincipal.RankingScreen
 import com.cecapi.app.feature.modulo1_aplicacionprincipal.SoporteScreen
 import com.cecapi.app.feature.modulo1_aplicacionprincipal.SettingsScreen
 import com.cecapi.app.feature.modulo5_solicitudes.RequestsScreen
@@ -86,6 +87,9 @@ fun CecapiNavGraph(navController: NavHostController = rememberNavController()) {
         }
         composable(CecapiDestinations.SOPORTE) {
             WakeScope { SoporteScreen(onBack = { navController.popBackStack() }) }
+        }
+        composable(CecapiDestinations.RANKING) {
+            WakeScope { RankingScreen(onBack = { navController.popBackStack() }) }
         }
         composable(CecapiDestinations.CHATS) {
             WakeScope {

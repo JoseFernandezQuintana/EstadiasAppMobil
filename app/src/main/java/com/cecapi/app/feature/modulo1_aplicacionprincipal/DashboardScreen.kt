@@ -22,6 +22,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.automirrored.filled.Help
 import androidx.compose.material.icons.filled.AdminPanelSettings
+import androidx.compose.material.icons.filled.TrendingUp
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -258,6 +259,31 @@ fun DashboardScreen(
                     modifier = Modifier.padding(start = 10.dp),
                 )
             }
+        }
+
+        // Abierta para cualquiera con sesión, sin importar el rol.
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp, vertical = 8.dp)
+                .heightIn(min = 56.dp)
+                .clip(RoundedCornerShape(16.dp))
+                .background(CecapiSurfaceElevated)
+                .border(1.dp, CecapiAccent.copy(alpha = 0.4f), RoundedCornerShape(16.dp))
+                .clickable(onClick = viewModel::onRankingSelected)
+                .semantics { contentDescription = "Clasificación. Toca dos veces para ver tu lugar." }
+                .voiceHint("Clasificación. Ve tu lugar y el de tu institución en Actividades.")
+                .padding(horizontal = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center,
+        ) {
+            Icon(Icons.Filled.TrendingUp, contentDescription = null, tint = CecapiAccent)
+            Text(
+                "Clasificación",
+                style = MaterialTheme.typography.titleMedium,
+                color = CecapiAccent,
+                modifier = Modifier.padding(start = 10.dp),
+            )
         }
 
         Text(

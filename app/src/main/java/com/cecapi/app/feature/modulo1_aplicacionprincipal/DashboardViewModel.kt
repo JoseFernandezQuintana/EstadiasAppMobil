@@ -211,6 +211,10 @@ class DashboardViewModel @Inject constructor(
             onSoporteSelected()
             return
         }
+        if (VoiceText.hasAny(VoiceText.normalize(text), "clasificacion", "tabla de clasificacion", "ranking")) {
+            onRankingSelected()
+            return
+        }
         if (ModuleVoice.isListRequest(text)) {
             voiceEngine.speak(ModuleVoice.spokenList(menu.value))
             return
@@ -404,6 +408,13 @@ class DashboardViewModel @Inject constructor(
     private fun esAlumnoOUsuario(): Boolean {
         val rol = currentUser.value?.rol?.let(RolUsuario::fromCodigo) ?: return false
         return rol == RolUsuario.ALUMNO || rol == RolUsuario.USUARIO
+    }
+
+    /** Open to anyone signed in, every role — unlike Gestión y Soporte, que dependen del rol. */
+    fun onRankingSelected() {
+        cues.play(FeedbackCues.Cue.NAVIGATE)
+        voiceEngine.speak("Abriendo clasificación.")
+        _navEvents.tryEmit(CecapiDestinations.RANKING)
     }
 
     /** A card of the main menu was tapped (or named out loud). */
