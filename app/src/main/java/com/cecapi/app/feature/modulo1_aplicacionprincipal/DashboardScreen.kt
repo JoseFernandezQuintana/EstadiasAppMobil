@@ -5,16 +5,23 @@ import android.app.Activity
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Logout
+import androidx.compose.material.icons.filled.AdminPanelSettings
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -27,7 +34,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
@@ -35,6 +45,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.cecapi.app.core.theme.CecapiAccent
 import com.cecapi.app.core.theme.CecapiError
 import com.cecapi.app.core.theme.CecapiEyebrowStyle
+import com.cecapi.app.core.theme.CecapiSurfaceElevated
 import com.cecapi.app.core.theme.CecapiTextMuted
 import com.cecapi.app.core.ui.MicPad
 import com.cecapi.app.core.ui.ModuleCarousel
@@ -42,6 +53,7 @@ import com.cecapi.app.core.ui.NoticeBanner
 import com.cecapi.app.core.ui.OfflineBanner
 import com.cecapi.app.core.ui.SuggestionChip
 import com.cecapi.app.core.ui.TopAction
+import com.cecapi.app.core.ui.voiceHint
 import com.cecapi.app.core.util.openTtsSettings
 import com.cecapi.app.core.voice.VoiceMessages
 import com.cecapi.app.core.voice.VoiceState
@@ -182,6 +194,39 @@ fun DashboardScreen(
             modifier = Modifier.padding(start = 24.dp, top = 24.dp, bottom = 12.dp),
         )
         ModuleCarousel(items = menu, onItemClick = viewModel::onMenuItemSelected)
+
+        // Only administrador, directivo and educador ever see this — never alumno or usuario.
+        val rol = currentUser?.rol?.let(RolUsuario::fromCodigo)
+        if (rol == RolUsuario.ADMINISTRADOR || rol == RolUsuario.DIRECTIVO || rol == RolUsuario.EDUCADOR) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp, vertical = 8.dp)
+                    .heightIn(min = 56.dp)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(CecapiSurfaceElevated)
+                    .border(1.dp, CecapiAccent.copy(alpha = 0.4f), RoundedCornerShape(16.dp))
+                    .clickable(onClick = viewModel::onGestionSelected)
+                    .semantics { contentDescription = "Gestión. Toca dos veces para administrar tu institución." }
+                    .voiceHint(
+                        when (rol) {
+                            RolUsuario.EDUCADOR -> "Gestión. Ve la lista de tus alumnos."
+                            else -> "Gestión. Administra las cuentas de tu institución."
+                        },
+                    )
+                    .padding(horizontal = 16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center,
+            ) {
+                Icon(Icons.Filled.AdminPanelSettings, contentDescription = null, tint = CecapiAccent)
+                Text(
+                    "Gestión",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = CecapiAccent,
+                    modifier = Modifier.padding(start = 10.dp),
+                )
+            }
+        }
 
         Text(
             text = "PUEDES DECIR",

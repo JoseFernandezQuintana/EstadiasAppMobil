@@ -19,4 +19,7 @@ object CecapiDestinations {
     const val REQUESTS = "requests"
     const val LEARNING = "learning"
     const val ENVIRONMENT = "environment"
+
+    /** Only for administrador, directivo and educador — never shown or reachable for alumno/usuario. */
+    const val GESTION = "gestion"
 }

@@ -201,6 +201,10 @@ class DashboardViewModel @Inject constructor(
             voiceEngine.speak("¿Cierro tu sesión? Di sí, cerrar, o no.", listenAfter = true)
             return
         }
+        if (puedeGestionar() && VoiceText.hasAny(VoiceText.normalize(text), "gestion", "administracion", "panel")) {
+            onGestionSelected()
+            return
+        }
         if (ModuleVoice.isListRequest(text)) {
             voiceEngine.speak(ModuleVoice.spokenList(menu.value))
             return
@@ -366,6 +370,18 @@ class DashboardViewModel @Inject constructor(
         cues.play(FeedbackCues.Cue.NAVIGATE)
         voiceEngine.speak("Abriendo la configuración.")
         _navEvents.tryEmit(CecapiDestinations.SETTINGS)
+    }
+
+    /** Only administrador, directivo and educador ever see the button that calls this. */
+    fun onGestionSelected() {
+        cues.play(FeedbackCues.Cue.NAVIGATE)
+        voiceEngine.speak("Abriendo gestión.")
+        _navEvents.tryEmit(CecapiDestinations.GESTION)
+    }
+
+    private fun puedeGestionar(): Boolean {
+        val rol = currentUser.value?.rol?.let(RolUsuario::fromCodigo) ?: return false
+        return rol == RolUsuario.ADMINISTRADOR || rol == RolUsuario.DIRECTIVO || rol == RolUsuario.EDUCADOR
     }
 
     /** A card of the main menu was tapped (or named out loud). */

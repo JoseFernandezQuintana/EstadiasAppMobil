@@ -106,4 +106,9 @@ object CommandCatalog {
             "Borra mi cuenta, para eliminar tu cuenta y todo lo que guardaste; te pido que confirmes. " +
             "Activa o desactiva el modo simple. " +
             "Cerrar sesión. Atrás, para volver al menú. " + MORE
+
+    /** Solo la ven administrador, directivo y educador. */
+    const val GESTION =
+        "En gestión puedes decir: cuántas personas, para saber cuántas ves. Toca a una persona para cambiarle el rol " +
+            "o, si es un alumno, asignarle un educador. Atrás, para volver al menú. " + MORE
 }
