@@ -8,6 +8,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 import com.cecapi.app.core.data.AppDatabase
 import com.cecapi.app.core.data.MIGRATION_1_2
 import com.cecapi.app.core.data.MIGRATION_2_3
+import com.cecapi.app.core.data.MIGRATION_3_4
 import com.cecapi.app.core.util.PasswordHasher
 import com.cecapi.app.feature.modulo3_asistenteinteligente.ConsultaIaDao
 import com.cecapi.app.feature.modulo3_asistenteinteligente.ContextoConversacionDao
@@ -56,7 +57,7 @@ object DatabaseModule {
         @ApplicationContext context: Context,
         databaseProvider: Provider<AppDatabase>,
     ): AppDatabase = Room.databaseBuilder(context, AppDatabase::class.java, "cecapi.db")
-        .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+        .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
         .addCallback(object : androidx.room.RoomDatabase.Callback() {
             override fun onCreate(db: SupportSQLiteDatabase) {
                 super.onCreate(db)
@@ -81,6 +82,8 @@ object DatabaseModule {
         val nombreCompleto: String,
         val rol: RolUsuario,
         val origen: String,
+        /** For a demo alumno: the username of the educador demo account that teaches them. */
+        val educadorUsername: String? = null,
     )
 
     /**
@@ -92,7 +95,8 @@ object DatabaseModule {
         DemoUser("CECAPI", "1234", "Usuario CECAPI", RolUsuario.ADMINISTRADOR, "admin"),
         DemoUser("PEPE", "1234", "Pepe", RolUsuario.ADMINISTRADOR, "admin"),
         DemoUser("JORGE", "4321", "Jorge", RolUsuario.DIRECTIVO, "CECAPI"),
-        DemoUser("JUAN", "1234", "Juan", RolUsuario.ALUMNO, "CECAPI"),
+        DemoUser("MIRIAM", "1234", "Miriam", RolUsuario.EDUCADOR, "CECAPI"),
+        DemoUser("JUAN", "1234", "Juan", RolUsuario.ALUMNO, "CECAPI", educadorUsername = "MIRIAM"),
     )
 
     private fun ensureDemoUsers(db: SupportSQLiteDatabase) {
@@ -102,19 +106,30 @@ object DatabaseModule {
                 "SELECT 1 FROM usuarios WHERE nombre_usuario = ? COLLATE NOCASE LIMIT 1",
                 arrayOf<Any?>(demo.nombreUsuario),
             ).use { it.moveToFirst() }
-            if (exists) return@forEach
-            db.insert(
-                "usuarios",
-                SQLiteDatabase.CONFLICT_IGNORE,
-                ContentValues().apply {
-                    put("nombre_usuario", demo.nombreUsuario)
-                    put("contrasena_hash", PasswordHasher.hash(demo.contrasena))
-                    put("nombre_completo", demo.nombreCompleto)
-                    put("fecha_registro", System.currentTimeMillis())
-                    put("rol", demo.rol.codigo)
-                    put("origen", demo.origen)
-                },
-            )
+            if (!exists) {
+                db.insert(
+                    "usuarios",
+                    SQLiteDatabase.CONFLICT_IGNORE,
+                    ContentValues().apply {
+                        put("nombre_usuario", demo.nombreUsuario)
+                        put("contrasena_hash", PasswordHasher.hash(demo.contrasena))
+                        put("nombre_completo", demo.nombreCompleto)
+                        put("fecha_registro", System.currentTimeMillis())
+                        put("rol", demo.rol.codigo)
+                        put("origen", demo.origen)
+                    },
+                )
+            }
+            // Runs every time too (not just on insert), so an account made before "educador" existed
+            // still ends up linked once its teacher's demo account is created.
+            if (demo.educadorUsername != null) {
+                db.execSQL(
+                    "UPDATE usuarios SET educador_id = " +
+                        "(SELECT id FROM usuarios WHERE nombre_usuario = ? COLLATE NOCASE LIMIT 1) " +
+                        "WHERE nombre_usuario = ? COLLATE NOCASE",
+                    arrayOf<Any?>(demo.educadorUsername, demo.nombreUsuario),
+                )
+            }
         }
     }
 

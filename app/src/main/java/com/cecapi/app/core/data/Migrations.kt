@@ -51,3 +51,10 @@ val MIGRATION_2_3 = object : Migration(2, 3) {
         )
     }
 }
+
+/** v4: roles get educador, and an alumno can be linked to the educador who teaches them. */
+val MIGRATION_3_4 = object : Migration(3, 4) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE usuarios ADD COLUMN educador_id INTEGER")
+    }
+}

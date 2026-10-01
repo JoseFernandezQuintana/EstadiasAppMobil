@@ -19,6 +19,7 @@ import kotlinx.coroutines.flow.Flow
 enum class RolUsuario(val codigo: String) {
     ADMINISTRADOR("administrador"),
     DIRECTIVO("directivo"),
+    EDUCADOR("educador"),
     ALUMNO("alumno"),
     USUARIO("usuario"),
     ;
@@ -46,6 +47,10 @@ data class UsuarioEntity(
     /** Institution or place the person comes from (e.g. "CECAPI"); empty when they signed up on their own. */
     @ColumnInfo(name = "origen")
     val origen: String = "",
+    /** For an alumno: the id of their assigned educador (another row in this same table). Null until assigned,
+     * and always null for every other role — an educador, directivo or usuario has no "own teacher". */
+    @ColumnInfo(name = "educador_id")
+    val educadorId: Long? = null,
 )
 
 @Entity(
@@ -103,6 +108,24 @@ interface UsuarioDao {
 
     @Query("SELECT * FROM usuarios WHERE id = :id LIMIT 1")
     suspend fun findById(id: Long): UsuarioEntity?
+
+    /** For an educador: the alumnos assigned to them, nobody else's. */
+    @Query("SELECT * FROM usuarios WHERE educador_id = :educadorId ORDER BY nombre_completo")
+    fun observeAlumnosDeEducador(educadorId: Long): Flow<List<UsuarioEntity>>
+
+    /** For a directivo: everyone in their institution, every role. An educador's panel narrows this itself. */
+    @Query("SELECT * FROM usuarios WHERE origen = :origen COLLATE NOCASE ORDER BY rol, nombre_completo")
+    fun observeUsuariosDeInstitucion(origen: String): Flow<List<UsuarioEntity>>
+
+    /** For an administrador: literally everyone — every institution and every independent usuario. */
+    @Query("SELECT * FROM usuarios ORDER BY origen, rol, nombre_completo")
+    fun observeTodos(): Flow<List<UsuarioEntity>>
+
+    @Query("UPDATE usuarios SET educador_id = :educadorId WHERE id = :alumnoId")
+    suspend fun asignarEducador(alumnoId: Long, educadorId: Long?)
+
+    @Query("UPDATE usuarios SET rol = :rol WHERE id = :usuarioId")
+    suspend fun cambiarRol(usuarioId: Long, rol: String)
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insert(usuario: UsuarioEntity): Long

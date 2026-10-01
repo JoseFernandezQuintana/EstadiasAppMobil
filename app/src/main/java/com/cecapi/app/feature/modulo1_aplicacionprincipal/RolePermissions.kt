@@ -1,0 +1,50 @@
+package com.cecapi.app.feature.modulo1_aplicacionprincipal
+
+/**
+ * Who can see or manage whom. Pure rules over two accounts' role, institution ([UsuarioEntity.origen]) and
+ * teacher link ([UsuarioEntity.educadorId]) — no database access, so a screen or a test can check a case
+ * without touching Room. This is the base the Administrador/Directivo/Educador management panels build on
+ * later; nothing calls it yet.
+ *
+ * Jerarquía: administrador (todo, sin límite) > directivo (su institución) > educador (solo sus alumnos,
+ * sin ver a otros educadores ni directivos) > alumno / usuario (no administran a nadie).
+ */
+object RolePermissions {
+
+    /** True when [observador] may see [objetivo] in a management list. */
+    fun puedeVer(observador: UsuarioEntity, objetivo: UsuarioEntity): Boolean {
+        return when (RolUsuario.fromCodigo(observador.rol)) {
+            RolUsuario.ADMINISTRADOR -> true
+            RolUsuario.DIRECTIVO -> mismaInstitucion(observador, objetivo)
+            RolUsuario.EDUCADOR ->
+                RolUsuario.fromCodigo(objetivo.rol) == RolUsuario.ALUMNO && objetivo.educadorId == observador.id
+            // Un alumno o un usuario independiente no administran a nadie — un alumno conoce a SU educador
+            // por separado (educadorAsignado), no por esta regla de "a quién administro".
+            RolUsuario.ALUMNO, RolUsuario.USUARIO -> false
+        }
+    }
+
+    /** True when [observador] can approve a new alumno/educador for their own institution. */
+    fun puedeDarAccesoInstitucional(observador: UsuarioEntity): Boolean =
+        RolUsuario.fromCodigo(observador.rol).let { it == RolUsuario.ADMINISTRADOR || it == RolUsuario.DIRECTIVO }
+
+    /** Only an administrador authorizes an independent usuario: institutions never see these accounts at all. */
+    fun puedeAutorizarUsuarioIndependiente(observador: UsuarioEntity): Boolean =
+        RolUsuario.fromCodigo(observador.rol) == RolUsuario.ADMINISTRADOR
+
+    /**
+     * Where to send an incident [reportante] files. With an institution, it goes there (the educador feature
+     * resolves a specific person later); an independent usuario has none, so it goes straight to the
+     * administradores instead of being lost.
+     */
+    fun destinoDeIncidencia(reportante: UsuarioEntity): DestinoIncidencia =
+        if (reportante.origen.isNotBlank()) DestinoIncidencia.InstitucionDe(reportante.origen) else DestinoIncidencia.Administradores
+
+    private fun mismaInstitucion(a: UsuarioEntity, b: UsuarioEntity): Boolean =
+        a.origen.isNotBlank() && a.origen.equals(b.origen, ignoreCase = true)
+}
+
+sealed interface DestinoIncidencia {
+    data class InstitucionDe(val origen: String) : DestinoIncidencia
+    data object Administradores : DestinoIncidencia
+}
