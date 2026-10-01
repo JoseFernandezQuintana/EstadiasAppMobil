@@ -11,7 +11,12 @@ object VoiceMessages {
     const val MIC_DENIED =
         "Sin el permiso del micrófono no puedo escucharte. Actívalo en los ajustes de la aplicación."
 
-    /** For modules that store their history per user, when nobody has signed in. */
+    /**
+     * For modules that only make sense with an account — a history with nothing in it to show, because
+     * nobody has signed in. Says why, not just "no": the camera and las actividades work without one, this
+     * one specifically needs it to have something to keep.
+     */
     const val NEEDS_LOGIN =
-        "Para usar este módulo necesitas iniciar sesión. Vuelve al inicio y di iniciar sesión."
+        "Esto es tu historial, así que necesita una cuenta para guardarse. Crear una es gratis y rápido: " +
+            "di crear cuenta. Si ya tienes una, di iniciar sesión."
 }

@@ -80,7 +80,12 @@ fun CecapiNavGraph(navController: NavHostController = rememberNavController()) {
             WakeScope { PersonalizationScreen(onBack = { navController.popBackStack() }) }
         }
         composable(CecapiDestinations.CHATS) {
-            WakeScope { ChatsScreen(onBack = { navController.popBackStack() }) }
+            WakeScope {
+                ChatsScreen(
+                    onBack = { navController.popBackStack() },
+                    onOpen = { route -> navController.navigate(route) },
+                )
+            }
         }
         composable(CecapiDestinations.CAMERA_HUB) {
             WakeScope {

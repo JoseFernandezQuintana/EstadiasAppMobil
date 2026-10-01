@@ -148,20 +148,19 @@ class RequestsViewModel @Inject constructor(
     }
 
     private fun finalizarSolicitud(plantilla: PlantillaSolicitudEntity, respuestas: Map<String, String>) {
-        val usuario = sessionRepository.currentUser.value ?: run {
-            // Nobody signed in: say so, and close the form instead of leaving it stuck waiting for an
-            // answer that can never be saved ("atrás" would otherwise be swallowed as one more answer).
-            _uiState.value = RequestsUiState()
-            voiceEngine.speak(
-                com.cecapi.app.core.voice.VoiceMessages.NEEDS_LOGIN + " Di atrás para volver al menú.",
-                listenAfter = true,
-            )
-            return
-        }
+        // The document is never withheld for lack of an account: generated and read for anyone. Only a
+        // signed-in person gets it saved to their history (generarSolicitud skips saving without one),
+        // instead of answering every question only to be told at the very end that it was all for nothing.
+        val usuarioId = sessionRepository.currentUser.value?.id
         viewModelScope.launch {
-            val solicitud = repository.generarSolicitud(usuario.id, plantilla, respuestas)
+            val solicitud = repository.generarSolicitud(usuarioId, plantilla, respuestas)
             _uiState.value = _uiState.value.copy(textoGenerado = solicitud.textoFinal)
-            voiceEngine.speak("Tu solicitud está lista. ${solicitud.textoFinal}")
+            val aviso = if (usuarioId == null) {
+                " Esto no quedó guardado porque no iniciaste sesión; crear una cuenta es gratis, di crear cuenta."
+            } else {
+                ""
+            }
+            voiceEngine.speak("Tu solicitud está lista. ${solicitud.textoFinal}$aviso")
         }
     }
 

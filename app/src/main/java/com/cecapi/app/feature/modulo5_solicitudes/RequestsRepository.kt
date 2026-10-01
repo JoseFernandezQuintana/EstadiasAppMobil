@@ -20,23 +20,31 @@ class RequestsRepository @Inject constructor(
 
     fun observeSolicitudes(usuarioId: Long): Flow<List<SolicitudGeneradaEntity>> = solicitudDao.observeByUser(usuarioId)
 
+    /**
+     * Answers fill in the template either way: the document is never withheld for lack of an account.
+     * With no [usuarioId] (nobody signed in) it is read out loud but not saved — there is no history to
+     * add it to — instead of discarding everything the person just answered.
+     */
     suspend fun generarSolicitud(
-        usuarioId: Long,
+        usuarioId: Long?,
         plantilla: PlantillaSolicitudEntity,
         datos: Map<String, String>,
     ): SolicitudGeneradaEntity {
         var textoFinal = plantilla.cuerpoPlantilla
         datos.forEach { (clave, valor) -> textoFinal = textoFinal.replace("{$clave}", valor) }
 
-        val solicitudId = solicitudDao.insert(
-            SolicitudGeneradaEntity(usuarioId = usuarioId, plantillaId = plantilla.id, textoFinal = textoFinal),
-        )
-        datoDao.insertAll(
-            datos.map { (clave, valor) -> DatoSolicitudEntity(solicitudId = solicitudId, clave = clave, valor = valor) },
-        )
+        val solicitudId = usuarioId?.let { id ->
+            val nuevoId = solicitudDao.insert(
+                SolicitudGeneradaEntity(usuarioId = id, plantillaId = plantilla.id, textoFinal = textoFinal),
+            )
+            datoDao.insertAll(
+                datos.map { (clave, valor) -> DatoSolicitudEntity(solicitudId = nuevoId, clave = clave, valor = valor) },
+            )
+            nuevoId
+        }
         return SolicitudGeneradaEntity(
-            id = solicitudId,
-            usuarioId = usuarioId,
+            id = solicitudId ?: 0,
+            usuarioId = usuarioId ?: 0,
             plantillaId = plantilla.id,
             textoFinal = textoFinal,
         )

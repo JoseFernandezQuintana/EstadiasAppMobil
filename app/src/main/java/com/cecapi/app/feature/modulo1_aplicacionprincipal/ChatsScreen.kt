@@ -37,6 +37,7 @@ import com.cecapi.app.core.ui.NoticeBanner
 import com.cecapi.app.core.ui.ScreenTopBar
 import com.cecapi.app.core.ui.SuggestionChip
 import com.cecapi.app.core.ui.TopAction
+import com.cecapi.app.core.navigation.CecapiDestinations
 import com.cecapi.app.core.ui.voiceHint
 import com.cecapi.app.core.voice.FeedbackCues
 import com.cecapi.app.core.voice.VoiceEngine
@@ -116,6 +117,9 @@ class ChatsViewModel @Inject constructor(
     private val _back = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     val back: SharedFlow<Unit> = _back
 
+    private val _routes = MutableSharedFlow<String>(extraBufferCapacity = 1)
+    val routes: SharedFlow<String> = _routes
+
     init {
         viewModelScope.launch {
             voiceEngine.recognizedSpeech.collect { speech -> onSpeech(speech.text) }
@@ -150,6 +154,15 @@ class ChatsViewModel @Inject constructor(
             ?: PendingDelete.NONE
         when {
             CommandCatalog.isRequest(spoken) -> onCommandsRequested()
+            // Only meaningful without a session: there is nothing to confirm/delete/read otherwise.
+            sessionRepository.currentUser.value == null && has("crear cuenta", "registrarme", "registrar", "nueva cuenta") -> {
+                voiceEngine.speak("Vamos a crear tu cuenta.")
+                _routes.tryEmit(CecapiDestinations.REGISTER)
+            }
+            sessionRepository.currentUser.value == null && has("iniciar sesion", "inicia sesion", "ingresar") -> {
+                voiceEngine.speak("Abriendo el inicio de sesión.")
+                _routes.tryEmit(CecapiDestinations.LOGIN)
+            }
             pending != PendingDelete.NONE && VoiceText.isNo(spoken) -> cancelDelete()
             pending != PendingDelete.NONE && VoiceText.isYes(spoken) -> confirmDelete()
             has("borra todos", "borrar todos", "elimina todos", "eliminar todos", "vacia") -> askDeleteAll()
@@ -244,10 +257,12 @@ class ChatsViewModel @Inject constructor(
 @Composable
 fun ChatsScreen(
     onBack: () -> Unit,
+    onOpen: (String) -> Unit = {},
     viewModel: ChatsViewModel = hiltViewModel(),
 ) {
     val chats by viewModel.chats.collectAsState()
     val state by viewModel.state.collectAsState()
+    LaunchedEffect(Unit) { viewModel.routes.collect(onOpen) }
 
     LaunchedEffect(Unit) { viewModel.back.collect { onBack() } }
 
