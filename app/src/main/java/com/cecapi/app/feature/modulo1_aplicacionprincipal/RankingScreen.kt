@@ -2,6 +2,7 @@ package com.cecapi.app.feature.modulo1_aplicacionprincipal
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -94,12 +95,32 @@ fun RankingScreen(
         }
 
         Text("TABLA INDIVIDUAL", style = MaterialTheme.typography.labelLarge, color = CecapiTextMuted)
+
+        if (state.tieneInstitucion) {
+            // "Competir con alumnos de su institución y de otras": las dos vistas, una u otra, no mezcladas.
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                AlcanceChip(
+                    label = "Mi institución",
+                    seleccionado = state.alcance == AlcanceRanking.MI_INSTITUCION,
+                    onClick = { viewModel.cambiarAlcance(AlcanceRanking.MI_INSTITUCION) },
+                    modifier = Modifier.weight(1f),
+                )
+                AlcanceChip(
+                    label = "Todas",
+                    seleccionado = state.alcance == AlcanceRanking.TODAS,
+                    onClick = { viewModel.cambiarAlcance(AlcanceRanking.TODAS) },
+                    modifier = Modifier.weight(1f),
+                )
+            }
+        }
+
         if (state.individual.isEmpty()) {
-            Text(
-                "Todavía nadie tiene puntos aquí. Practica en Actividades, en los sonidos, para aparecer.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = CecapiTextMuted,
-            )
+            val mensaje = if (state.alcance == AlcanceRanking.MI_INSTITUCION) {
+                "Todavía nadie de tu institución tiene puntos aquí. Practica en Actividades, en los sonidos, para aparecer."
+            } else {
+                "Todavía nadie tiene puntos aquí. Practica en Actividades, en los sonidos, para aparecer."
+            }
+            Text(mensaje, style = MaterialTheme.typography.bodyMedium, color = CecapiTextMuted)
         } else {
             state.individual.forEachIndexed { index, fila ->
                 RankingRow(
@@ -135,6 +156,29 @@ fun RankingScreen(
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun AlcanceChip(label: String, seleccionado: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val shape = RoundedCornerShape(50)
+    Row(
+        modifier = modifier
+            .heightIn(min = 44.dp)
+            .clip(shape)
+            .background(if (seleccionado) CecapiAccent.copy(alpha = 0.2f) else CecapiSurfaceElevated)
+            .border(if (seleccionado) 2.dp else 1.dp, if (seleccionado) CecapiAccent else CecapiTextMuted.copy(alpha = 0.4f), shape)
+            .clickable(onClick = onClick)
+            .voiceHint("$label. Toca para comparar aquí."),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            if (seleccionado) "$label  ✓" else label,
+            style = MaterialTheme.typography.bodyMedium,
+            color = if (seleccionado) CecapiAccent else MaterialTheme.colorScheme.onBackground,
+            modifier = Modifier.padding(vertical = 10.dp),
+        )
     }
 }
 

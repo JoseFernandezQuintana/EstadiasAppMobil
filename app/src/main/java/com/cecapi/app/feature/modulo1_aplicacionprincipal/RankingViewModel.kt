@@ -6,17 +6,25 @@ import com.cecapi.app.core.voice.FeedbackCues
 import com.cecapi.app.core.voice.VoiceEngine
 import com.cecapi.app.core.voice.VoiceText
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+
+/** Con quién se compara el individual: solo su institución, o todo el mundo (otras instituciones incluidas). */
+enum class AlcanceRanking { MI_INSTITUCION, TODAS }
 
 data class RankingUiState(
     val individual: List<RankingFila> = emptyList(),
     val instituciones: List<RankingInstitucion> = emptyList(),
+    val alcance: AlcanceRanking = AlcanceRanking.TODAS,
+    /** Un usuario independiente no tiene institución: no tiene sentido ofrecerle "mi institución". */
+    val tieneInstitucion: Boolean = false,
     val miId: Long? = null,
     val miApodo: String = "",
     val esperandoApodo: Boolean = false,
@@ -24,9 +32,12 @@ data class RankingUiState(
 
 /**
  * Clasificación: la tabla individual (apodo, no el nombre real — hay menores) y la de instituciones
- * compitiendo entre ellas. Los puntos vienen de Actividades de sonidos; alguien sin puntos (vibración
- * todavía no da puntos, o nunca ha jugado) simplemente no aparece en ninguna de las dos listas.
+ * compitiendo entre ellas. Un alumno puede comparar su lugar solo contra su institución o contra todas —
+ * "competir con alumnos de su institución y de otras", tal cual se pidió. Los puntos vienen de Actividades
+ * de sonidos; alguien sin puntos (vibración todavía no da puntos, o nunca ha jugado) simplemente no
+ * aparece en ninguna de las dos listas.
  */
+@OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
 class RankingViewModel @Inject constructor(
     private val voiceEngine: VoiceEngine,
@@ -36,7 +47,20 @@ class RankingViewModel @Inject constructor(
     private val cues: FeedbackCues,
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(RankingUiState())
+    private val miOrigen = sessionRepository.currentUser.value?.origen.orEmpty()
+    private val tieneInstitucion = miOrigen.isNotBlank() && !miOrigen.equals("admin", ignoreCase = true)
+
+    private val _alcance = MutableStateFlow(if (tieneInstitucion) AlcanceRanking.MI_INSTITUCION else AlcanceRanking.TODAS)
+
+    private val individualFlow = _alcance.flatMapLatest { alcance ->
+        if (alcance == AlcanceRanking.MI_INSTITUCION && tieneInstitucion) {
+            rankingDao.observeIndividualDeInstitucion(miOrigen)
+        } else {
+            rankingDao.observeIndividual()
+        }
+    }
+
+    private val _uiState = MutableStateFlow(RankingUiState(alcance = _alcance.value, tieneInstitucion = tieneInstitucion))
     val uiState: StateFlow<RankingUiState> = _uiState.asStateFlow()
 
     private val _back = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
@@ -47,7 +71,7 @@ class RankingViewModel @Inject constructor(
         _uiState.value = _uiState.value.copy(miId = usuario?.id, miApodo = usuario?.apodo.orEmpty())
 
         viewModelScope.launch {
-            rankingDao.observeIndividual().collect { lista -> _uiState.value = _uiState.value.copy(individual = lista) }
+            individualFlow.collect { lista -> _uiState.value = _uiState.value.copy(individual = lista) }
         }
         viewModelScope.launch {
             rankingDao.observeInstituciones().collect { lista -> _uiState.value = _uiState.value.copy(instituciones = lista) }
@@ -57,10 +81,21 @@ class RankingViewModel @Inject constructor(
         }
 
         voiceEngine.speak(
-            "Clasificación. Aquí ves tu lugar y el de tu institución. Di mi lugar, para saber en qué " +
-                "posición vas, o mi apodo, para cambiar cómo te muestro aquí.",
+            if (tieneInstitucion) {
+                "Clasificación. Empiezas viendo tu institución. Di todas, para compararte con otras " +
+                    "instituciones también, o mi institución para volver. Di mi lugar, para saber tu posición."
+            } else {
+                "Clasificación. Aquí ves tu lugar entre todos. Di mi lugar, para saber tu posición, o mi " +
+                    "apodo, para cambiar cómo te muestro."
+            },
             listenAfter = true,
         )
+    }
+
+    fun cambiarAlcance(nuevo: AlcanceRanking) {
+        if (nuevo == _alcance.value) return
+        _alcance.value = nuevo
+        _uiState.value = _uiState.value.copy(alcance = nuevo)
     }
 
     private fun onSpeech(spoken: String) {
@@ -73,6 +108,14 @@ class RankingViewModel @Inject constructor(
         when {
             has("mi apodo", "cambiar apodo", "cambiar mi apodo", "poner apodo", "nuevo apodo") -> pedirApodo()
             has("mi lugar", "mi posicion", "mi puesto", "en que lugar voy", "como voy") -> speakMiLugar()
+            has("todas", "todas las instituciones", "otras instituciones", "comparar con todos") -> {
+                cambiarAlcance(AlcanceRanking.TODAS)
+                voiceEngine.speak("Comparando con todas las instituciones.", listenAfter = true)
+            }
+            _uiState.value.tieneInstitucion && has("mi institucion", "solo mi institucion", "mis companeros") -> {
+                cambiarAlcance(AlcanceRanking.MI_INSTITUCION)
+                voiceEngine.speak("Comparando solo con tu institución.", listenAfter = true)
+            }
             has("atras", "volver", "vuelve", "regresa", "regresar", "salir", "menu", "inicio") -> _back.tryEmit(Unit)
             else -> {
                 cues.play(FeedbackCues.Cue.NOT_UNDERSTOOD)
@@ -89,7 +132,8 @@ class RankingViewModel @Inject constructor(
             return
         }
         val fila = _uiState.value.individual[lugar]
-        voiceEngine.speak("Vas en el lugar ${lugar + 1}, con ${fila.puntosTotales} puntos.", listenAfter = true)
+        val ambito = if (_uiState.value.alcance == AlcanceRanking.MI_INSTITUCION) "de tu institución" else "entre todas las instituciones"
+        voiceEngine.speak("Vas en el lugar ${lugar + 1} $ambito, con ${fila.puntosTotales} puntos.", listenAfter = true)
     }
 
     fun pedirApodo() {
@@ -121,8 +165,14 @@ class RankingViewModel @Inject constructor(
     }
 
     fun onCommandsRequested() {
+        val textoAlcance = if (_uiState.value.tieneInstitucion) {
+            "Di todas, para comparar con otras instituciones, o mi institución, para volver a solo la tuya. "
+        } else {
+            ""
+        }
         voiceEngine.speak(
-            "Di mi lugar, para saber tu posición. Di mi apodo, para cambiar cómo te muestro. Atrás, para volver al menú.",
+            "Di mi lugar, para saber tu posición. $textoAlcance" +
+                "Di mi apodo, para cambiar cómo te muestro. Atrás, para volver al menú.",
             listenAfter = true,
         )
     }

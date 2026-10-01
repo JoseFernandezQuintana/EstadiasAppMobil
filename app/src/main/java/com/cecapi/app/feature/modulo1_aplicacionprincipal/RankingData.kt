@@ -41,6 +41,17 @@ interface RankingDao {
     )
     fun observeIndividual(): Flow<List<RankingFila>>
 
+    /** Solo las personas de [origen]: para que un alumno se compare con sus compañeros de institución,
+     * no solo con todo el mundo en la tabla global. */
+    @Query(
+        "SELECT u.id AS usuarioId, u.nombre_completo AS nombreCompleto, u.apodo AS apodo, u.origen AS origen, " +
+            "u.rol AS rol, n.puntos_totales AS puntosTotales, n.nivel_actual AS nivelActual " +
+            "FROM niveles_aprendizaje n JOIN usuarios u ON u.id = n.usuario_id " +
+            "WHERE n.puntos_totales > 0 AND u.origen = :origen COLLATE NOCASE " +
+            "ORDER BY n.puntos_totales DESC LIMIT 50",
+    )
+    fun observeIndividualDeInstitucion(origen: String): Flow<List<RankingFila>>
+
     // "admin" es el origen de las cuentas de administrador (ver DatabaseModule.demoUsers), no una
     // institución real — se excluye igual que un origen vacío (usuario independiente).
     @Query(
