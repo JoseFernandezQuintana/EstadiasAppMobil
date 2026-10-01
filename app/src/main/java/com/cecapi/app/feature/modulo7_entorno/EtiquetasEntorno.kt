@@ -153,15 +153,88 @@ object EtiquetasEntorno {
         "bike" to NombreEs("bicicleta", "una bicicleta", true),
         "motorcycle" to NombreEs("motocicleta", "una motocicleta", true),
         "bus" to NombreEs("camión", "un camión", false),
+
+        // Personas y animales (antes no estaban: una persona o mascota enfrente no se decía nada de ella)
+        "person" to NombreEs("persona", "una persona", true),
+        "human" to NombreEs("persona", "una persona", true),
+        "man" to NombreEs("hombre", "un hombre", false),
+        "woman" to NombreEs("mujer", "una mujer", true),
+        "boy" to NombreEs("niño", "un niño", false),
+        "girl" to NombreEs("niña", "una niña", true),
+        "child" to NombreEs("niño", "un niño", false),
+        "animal" to NombreEs("animal", "un animal", false),
+        "dog" to NombreEs("perro", "un perro", false),
+        "cat" to NombreEs("gato", "un gato", false),
+        "bird" to NombreEs("pájaro", "un pájaro", false),
+        "fish" to NombreEs("pez", "un pez", false),
+
+        // Estructura del espacio (antes se ignoraban: nunca se decía si había pared, piso o escaleras)
+        "wall" to NombreEs("pared", "una pared", true),
+        "floor" to NombreEs("piso", "un piso", false),
+        "ceiling" to NombreEs("techo", "un techo", false),
+        "stairs" to NombreEs("escaleras", "unas escaleras", true),
+        "room" to NombreEs("habitación", "una habitación", true),
+        "picture frame" to NombreEs("marco", "un marco", false),
+
+        // Baño
+        "toilet" to NombreEs("inodoro", "un inodoro", false),
+        "sink" to NombreEs("lavabo", "un lavabo", false),
+        "bathtub" to NombreEs("tina", "una tina", true),
+        "towel" to NombreEs("toalla", "una toalla", true),
+        "soap" to NombreEs("jabón", "un jabón", false),
+        "toothbrush" to NombreEs("cepillo de dientes", "un cepillo de dientes", false),
+
+        // Electrodomésticos de cocina
+        "refrigerator" to NombreEs("refrigerador", "un refrigerador", false),
+        "oven" to NombreEs("horno", "un horno", false),
+        "stove" to NombreEs("estufa", "una estufa", true),
+        "microwave oven" to NombreEs("microondas", "un microondas", false),
+        "kettle" to NombreEs("tetera", "una tetera", true),
+        "toaster" to NombreEs("tostadora", "una tostadora", true),
+        "blender" to NombreEs("licuadora", "una licuadora", true),
+        "washing machine" to NombreEs("lavadora", "una lavadora", true),
+        "dishwasher" to NombreEs("lavavajillas", "un lavavajillas", false),
+
+        // Papelería y oficina
+        "scissors" to NombreEs("tijeras", "unas tijeras", true),
+        "stapler" to NombreEs("engrapadora", "una engrapadora", true),
+        "calculator" to NombreEs("calculadora", "una calculadora", true),
+        "ruler" to NombreEs("regla", "una regla", true),
+        "eraser" to NombreEs("borrador", "un borrador", false),
+        "envelope" to NombreEs("sobre", "un sobre", false),
+        "whiteboard" to NombreEs("pizarrón", "un pizarrón", false),
+
+        // Calle y exterior
+        "traffic light" to NombreEs("semáforo", "un semáforo", false),
+        "stop sign" to NombreEs("señal de alto", "una señal de alto", true),
+        "street light" to NombreEs("poste de luz", "un poste de luz", false),
+        "bench" to NombreEs("banca", "una banca", true),
+        "trash can" to NombreEs("bote de basura", "un bote de basura", false),
+        "fire hydrant" to NombreEs("hidrante", "un hidrante", false),
+        "sidewalk" to NombreEs("banqueta", "una banqueta", true),
+
+        // Deportes y varios
+        "ball" to NombreEs("pelota", "una pelota", true),
+        "football" to NombreEs("balón", "un balón", false),
+        "basketball" to NombreEs("balón de básquetbol", "un balón de básquetbol", false),
+        "banknote" to NombreEs("billete", "un billete", false),
+        "coin" to NombreEs("moneda", "una moneda", true),
+        "scale" to NombreEs("báscula", "una báscula", true),
+        "candle" to NombreEs("vela", "una vela", true),
+        "fan" to NombreEs("ventilador", "un ventilador", false),
+        "guitar" to NombreEs("guitarra", "una guitarra", true),
+        "musical instrument" to NombreEs("instrumento musical", "un instrumento musical", false),
     )
 
     private val etiquetasIgnoradas = setOf(
         "material", "parallel", "rectangle", "font", "pattern", "brand", "line",
-        "sleeve", "wood", "metal", "plastic", "indoor", "room", "floor", "flooring",
-        "ceiling", "wall", "technology", "electronic device", "single", "snapshot",
+        "sleeve", "wood", "metal", "plastic", "indoor", "flooring",
+        "technology", "electronic device", "single", "snapshot",
         "photography", "design", "circle", "square", "symmetry", "mesh", "space",
         "component", "magenta", "cyan", "gray", "white", "black", "red", "blue",
-        "green", "yellow", "orange", "pink", "purple", "brown", "angle", "rectangle",
+        "green", "yellow", "orange", "pink", "purple", "brown", "angle",
+        "text", "number", "symbol", "shape", "triangle", "curve", "logo",
+        "still life photography", "stock photography", "picture frame style",
     )
 
     fun traducir(etiquetaIngles: String): NombreEs? {
