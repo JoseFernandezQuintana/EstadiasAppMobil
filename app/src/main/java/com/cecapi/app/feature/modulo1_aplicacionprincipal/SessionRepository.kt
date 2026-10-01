@@ -70,9 +70,12 @@ class SessionRepository @Inject constructor(
         return LoginResult.Success(usuario)
     }
 
-    /** Creates a new CECAPI account. Anyone opening the app can self-register — there is
-     * no institutional approval step in v1.0 (see Módulo 13 in database/schema.sql for
-     * the future admin-managed accounts flow). */
+    /**
+     * Creates a new CECAPI account. Anyone can self-register and sign in right away — "por default se
+     * les dejará ingresar" — but [UsuarioEntity.validado] defaults to false, so it shows up as pending in
+     * whoever is above them in Gestión (administrador > directivo > educador > alumno, or
+     * administrador > usuario) to confirm later. Nothing here blocks on that.
+     */
     suspend fun register(nombreUsuario: String, contrasena: String, nombreCompleto: String): RegisterResult {
         val nombreNormalizado = nombreUsuario.trim().uppercase()
         // The table has no unique index on the username, so the duplicate check has to be explicit.
@@ -104,6 +107,33 @@ class SessionRepository @Inject constructor(
         accountEraser.erase(user.id)
         logout()
         return true
+    }
+
+    sealed interface EditarPerfilResult {
+        data object Exito : EditarPerfilResult
+        data object ContrasenaActualIncorrecta : EditarPerfilResult
+        data object SinSesion : EditarPerfilResult
+    }
+
+    /**
+     * Each person edits their own name and, optionally, their password — never someone else's (Gestión
+     * only ever changes a role, not these). Confirms with the CURRENT password first, same as deleting
+     * the account, so a stray "cambia mi nombre" from someone else in the room cannot silently do it.
+     */
+    suspend fun actualizarPerfil(nombreCompleto: String, contrasenaActual: String, nuevaContrasena: String?): EditarPerfilResult {
+        val user = _currentUser.value ?: return EditarPerfilResult.SinSesion
+        if (PasswordHasher.hash(contrasenaActual.trim()) != user.contrasenaHash) {
+            return EditarPerfilResult.ContrasenaActualIncorrecta
+        }
+        val nombreLimpio = nombreCompleto.trim().ifBlank { user.nombreCompleto }
+        usuarioDao.actualizarNombre(user.id, nombreLimpio)
+        var nuevoHash = user.contrasenaHash
+        if (!nuevaContrasena.isNullOrBlank()) {
+            nuevoHash = PasswordHasher.hash(nuevaContrasena.trim())
+            usuarioDao.actualizarContrasena(user.id, nuevoHash)
+        }
+        _currentUser.value = user.copy(nombreCompleto = nombreLimpio, contrasenaHash = nuevoHash)
+        return EditarPerfilResult.Exito
     }
 
     /** True once after a logout, so the home screen can say "Sesión cerrada" as it opens. */

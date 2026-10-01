@@ -92,6 +92,11 @@ fun SettingsScreen(
     val awaitingDeletePassword by viewModel.awaitingDeletePassword.collectAsState()
     var deletePassword by remember { mutableStateOf("") }
     var deletePasswordVisible by remember { mutableStateOf(false) }
+    val editandoCuenta by viewModel.editandoCuenta.collectAsState()
+    var nombreEditado by remember(user?.nombreCompleto, editandoCuenta) { mutableStateOf(user?.nombreCompleto.orEmpty()) }
+    var contrasenaActualEdit by remember(editandoCuenta) { mutableStateOf("") }
+    var contrasenaNuevaEdit by remember(editandoCuenta) { mutableStateOf("") }
+    var contrasenaEditVisible by remember { mutableStateOf(false) }
 
     var volume by remember { mutableFloatStateOf(viewModel.currentVolumePercent().toFloat()) }
 
@@ -280,6 +285,69 @@ fun SettingsScreen(
                     style = MaterialTheme.typography.bodyMedium,
                     color = CecapiTextMuted,
                 )
+                if (!editandoCuenta) {
+                    Button(
+                        onClick = viewModel::onEditarCuenta,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 56.dp)
+                            .semantics { contentDescription = "Editar mi cuenta. Cambia tu nombre o tu contraseña." }
+                            .voiceHint("Editar mi cuenta. Cambia tu nombre o tu contraseña; te pide tu contraseña actual para confirmar."),
+                        colors = ButtonDefaults.buttonColors(containerColor = CecapiSurfaceElevated, contentColor = CecapiAccent),
+                    ) {
+                        Text("Editar mi cuenta", style = MaterialTheme.typography.titleMedium)
+                    }
+                } else {
+                    NoticeBanner("Cambia lo que quieras y confirma con tu contraseña actual.")
+                    OutlinedTextField(
+                        value = nombreEditado,
+                        onValueChange = { nombreEditado = it },
+                        modifier = Modifier.fillMaxWidth().voiceHint("Tu nombre completo."),
+                        placeholder = { Text("Tu nombre completo") },
+                        singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = CecapiAccent, unfocusedBorderColor = CecapiTextMuted),
+                    )
+                    OutlinedTextField(
+                        value = contrasenaNuevaEdit,
+                        onValueChange = { contrasenaNuevaEdit = it },
+                        modifier = Modifier.fillMaxWidth().voiceHint("Nueva contraseña, si quieres cambiarla. Déjalo vacío para no cambiarla."),
+                        placeholder = { Text("Nueva contraseña (opcional)") },
+                        leadingIcon = { Icon(Icons.Filled.Lock, contentDescription = null) },
+                        singleLine = true,
+                        visualTransformation = if (contrasenaEditVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                        trailingIcon = {
+                            IconButton(onClick = { contrasenaEditVisible = !contrasenaEditVisible }) {
+                                Icon(
+                                    imageVector = if (contrasenaEditVisible) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
+                                    contentDescription = if (contrasenaEditVisible) "Ocultar contraseña" else "Mostrar contraseña",
+                                )
+                            }
+                        },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = CecapiAccent, unfocusedBorderColor = CecapiTextMuted),
+                    )
+                    OutlinedTextField(
+                        value = contrasenaActualEdit,
+                        onValueChange = { contrasenaActualEdit = it },
+                        modifier = Modifier.fillMaxWidth().voiceHint("Tu contraseña actual, para confirmar los cambios."),
+                        placeholder = { Text("Tu contraseña actual, para confirmar") },
+                        leadingIcon = { Icon(Icons.Filled.Lock, contentDescription = null) },
+                        singleLine = true,
+                        visualTransformation = PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
+                        keyboardActions = KeyboardActions(
+                            onDone = { viewModel.onGuardarPerfil(nombreEditado, contrasenaActualEdit, contrasenaNuevaEdit) },
+                        ),
+                        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = CecapiAccent, unfocusedBorderColor = CecapiTextMuted),
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(
+                            onClick = { viewModel.onGuardarPerfil(nombreEditado, contrasenaActualEdit, contrasenaNuevaEdit) },
+                            colors = ButtonDefaults.buttonColors(containerColor = CecapiAccent),
+                        ) { Text("Guardar", color = MaterialTheme.colorScheme.onPrimary) }
+                        Button(onClick = viewModel::onCancelarEdicion) { Text("Cancelar") }
+                    }
+                }
                 Button(
                     onClick = viewModel::onLogout,
                     modifier = Modifier

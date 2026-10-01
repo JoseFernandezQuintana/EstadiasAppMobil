@@ -28,9 +28,11 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.cecapi.app.core.theme.CecapiAccent
+import com.cecapi.app.core.theme.CecapiSuccess
 import com.cecapi.app.core.theme.CecapiSurface
 import com.cecapi.app.core.theme.CecapiSurfaceElevated
 import com.cecapi.app.core.theme.CecapiTextMuted
+import com.cecapi.app.core.theme.CecapiWarning
 import com.cecapi.app.core.ui.ScreenTopBar
 import com.cecapi.app.core.ui.voiceHint
 
@@ -73,9 +75,11 @@ fun GestionScreen(
                         expandido = state.expandidoId == persona.id,
                         rolesAsignables = viewModel.rolesAsignables(),
                         educadoresDisponibles = { viewModel.educadoresPara(persona) },
+                        puedeValidar = viewModel.puedeValidar(persona),
                         onClick = { viewModel.onPersonaTocada(persona) },
                         onRolElegido = { rol -> viewModel.onRolElegido(persona, rol) },
                         onEducadorElegido = { educador -> viewModel.onEducadorElegido(persona, educador) },
+                        onValidar = { viewModel.onValidar(persona) },
                     )
                 }
             }
@@ -91,9 +95,11 @@ private fun PersonaCard(
     expandido: Boolean,
     rolesAsignables: List<RolUsuario>,
     educadoresDisponibles: () -> List<UsuarioEntity>,
+    puedeValidar: Boolean,
     onClick: () -> Unit,
     onRolElegido: (RolUsuario) -> Unit,
     onEducadorElegido: (UsuarioEntity?) -> Unit,
+    onValidar: () -> Unit,
 ) {
     val shape = RoundedCornerShape(16.dp)
     val rolLegible = persona.rol.replaceFirstChar { it.uppercase() }
@@ -121,6 +127,35 @@ private fun PersonaCard(
             Column(modifier = Modifier.weight(1f)) {
                 Text(persona.nombreCompleto, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onBackground)
                 Text(detalle, style = MaterialTheme.typography.bodyMedium, color = CecapiTextMuted)
+            }
+            if (!persona.validado) {
+                Text(
+                    "PENDIENTE",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = CecapiWarning,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(50))
+                        .background(CecapiWarning.copy(alpha = 0.15f))
+                        .padding(horizontal = 10.dp, vertical = 4.dp),
+                )
+            }
+        }
+
+        if (puedeValidar) {
+            Box(
+                modifier = Modifier
+                    .padding(top = 10.dp)
+                    .heightIn(min = 44.dp)
+                    .clip(RoundedCornerShape(50))
+                    .background(CecapiSuccess.copy(alpha = 0.18f))
+                    .border(1.dp, CecapiSuccess, RoundedCornerShape(50))
+                    .clickable(onClick = onValidar)
+                    .semantics { contentDescription = "Validar a ${persona.nombreCompleto}." }
+                    .voiceHint("Validar. Confirma que esta cuenta ya quedó revisada.")
+                    .padding(horizontal = 14.dp, vertical = 8.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text("Validar", style = MaterialTheme.typography.bodyMedium, color = CecapiSuccess)
             }
         }
 
@@ -172,14 +207,20 @@ private fun PersonaCard(
 }
 
 @Composable
-private fun RolChip(label: String, selected: Boolean, onClick: () -> Unit) {
+private fun RolChip(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    tint: androidx.compose.ui.graphics.Color = CecapiAccent,
+) {
     val shape = RoundedCornerShape(50)
     Box(
-        modifier = Modifier
+        modifier = modifier
             .heightIn(min = 44.dp)
             .clip(shape)
-            .background(if (selected) CecapiAccent.copy(alpha = 0.2f) else CecapiSurfaceElevated)
-            .border(if (selected) 2.dp else 1.dp, if (selected) CecapiAccent else CecapiTextMuted.copy(alpha = 0.4f), shape)
+            .background(if (selected) tint.copy(alpha = 0.2f) else CecapiSurfaceElevated)
+            .border(if (selected) 2.dp else 1.dp, if (selected) tint else CecapiTextMuted.copy(alpha = 0.4f), shape)
             .clickable(onClick = onClick)
             .padding(horizontal = 14.dp, vertical = 8.dp),
         contentAlignment = Alignment.Center,
@@ -187,7 +228,7 @@ private fun RolChip(label: String, selected: Boolean, onClick: () -> Unit) {
         Text(
             if (selected) "$label  ✓" else label,
             style = MaterialTheme.typography.bodyMedium,
-            color = if (selected) CecapiAccent else MaterialTheme.colorScheme.onBackground,
+            color = if (selected) tint else MaterialTheme.colorScheme.onBackground,
         )
     }
 }

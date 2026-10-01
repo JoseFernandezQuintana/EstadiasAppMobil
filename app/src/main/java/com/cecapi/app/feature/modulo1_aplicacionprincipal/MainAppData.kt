@@ -54,6 +54,14 @@ data class UsuarioEntity(
     /** Shown on the ranking instead of the real name — chosen by the person, null until they set one. */
     @ColumnInfo(name = "apodo")
     val apodo: String? = null,
+    /**
+     * Does NOT block logging in or using the app — "por default se les dejará ingresar". It only flags
+     * the account for whoever in the chain above them (administrador > directivo > educador > alumno, or
+     * administrador > usuario) to review in Gestión. New self-registered accounts start false; a demo
+     * account or an account that already existed before this column was added starts true.
+     */
+    @ColumnInfo(name = "validado")
+    val validado: Boolean = false,
 )
 
 @Entity(
@@ -132,6 +140,15 @@ interface UsuarioDao {
 
     @Query("UPDATE usuarios SET apodo = :apodo WHERE id = :usuarioId")
     suspend fun actualizarApodo(usuarioId: Long, apodo: String?)
+
+    @Query("UPDATE usuarios SET nombre_completo = :nombre WHERE id = :usuarioId")
+    suspend fun actualizarNombre(usuarioId: Long, nombre: String)
+
+    @Query("UPDATE usuarios SET contrasena_hash = :hash WHERE id = :usuarioId")
+    suspend fun actualizarContrasena(usuarioId: Long, hash: String)
+
+    @Query("UPDATE usuarios SET validado = 1 WHERE id = :usuarioId")
+    suspend fun validar(usuarioId: Long)
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insert(usuario: UsuarioEntity): Long

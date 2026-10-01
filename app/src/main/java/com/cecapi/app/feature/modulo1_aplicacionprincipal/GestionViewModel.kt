@@ -152,4 +152,19 @@ class GestionViewModel @Inject constructor(
         }
         _expandidoId.value = null
     }
+
+    /** Administrador valida directivo (o a cualquiera); directivo valida educador; educador valida alumno. */
+    fun puedeValidar(persona: UsuarioEntity): Boolean {
+        val observador = sessionRepository.currentUser.value ?: return false
+        return RolePermissions.puedeValidar(observador, persona)
+    }
+
+    fun onValidar(persona: UsuarioEntity) {
+        if (!puedeValidar(persona)) return
+        viewModelScope.launch {
+            usuarioDao.validar(persona.id)
+            cues.play(FeedbackCues.Cue.SUCCESS)
+            voiceEngine.speak("Validé a ${persona.nombreCompleto}.")
+        }
+    }
 }

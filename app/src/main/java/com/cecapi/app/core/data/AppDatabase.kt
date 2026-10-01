@@ -87,7 +87,7 @@ import com.cecapi.app.feature.modulo2_asistentevoz.RespuestaAuditivaEntity
         ObjetoDetectadoEntity::class,
         DescripcionEntornoEntity::class,
     ],
-    version = 6,
+    version = 7,
     exportSchema = false,
 )
 abstract class AppDatabase : RoomDatabase() {

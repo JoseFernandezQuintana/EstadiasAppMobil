@@ -73,6 +73,10 @@ class SettingsViewModel @Inject constructor(
     private var deleteAskedAt = 0L
     val pendingClean: StateFlow<Boolean> = _pendingClean.asStateFlow()
 
+    /** True while the "editar mi cuenta" form is open. Touch-only for now, not voice-driven yet. */
+    private val _editandoCuenta = MutableStateFlow(false)
+    val editandoCuenta: StateFlow<Boolean> = _editandoCuenta.asStateFlow()
+
     init {
         refreshStorage()
         viewModelScope.launch {
@@ -280,6 +284,37 @@ class SettingsViewModel @Inject constructor(
         _awaitingDeletePassword.value = false
         voiceEngine.rawInput = false
         voiceEngine.speak("De acuerdo, no borré nada.", listenAfter = true)
+    }
+
+    // ---- Editar mi cuenta (cada quien la suya; Gestión solo cambia roles, nunca esto) -----------------
+
+    fun onEditarCuenta() {
+        _editandoCuenta.value = true
+    }
+
+    fun onCancelarEdicion() {
+        _editandoCuenta.value = false
+    }
+
+    /** [nuevaContrasena] vacía significa "no la cambies". Pide la contraseña actual para confirmar, igual
+     * que borrar la cuenta, así nadie más en la habitación puede cambiar tu nombre o tu contraseña. */
+    fun onGuardarPerfil(nombreCompleto: String, contrasenaActual: String, nuevaContrasena: String) {
+        viewModelScope.launch {
+            when (sessionRepository.actualizarPerfil(nombreCompleto, contrasenaActual, nuevaContrasena.ifBlank { null })) {
+                SessionRepository.EditarPerfilResult.Exito -> {
+                    _editandoCuenta.value = false
+                    cues.play(FeedbackCues.Cue.SUCCESS)
+                    voiceEngine.speak("Listo, guardé los cambios de tu cuenta.")
+                }
+                SessionRepository.EditarPerfilResult.ContrasenaActualIncorrecta -> {
+                    cues.play(FeedbackCues.Cue.ERROR)
+                    voiceEngine.speak("Esa no es tu contraseña actual. No guardé nada.")
+                }
+                SessionRepository.EditarPerfilResult.SinSesion -> {
+                    voiceEngine.speak("No hay una sesión iniciada.")
+                }
+            }
+        }
     }
 
     /** The AI is optional and off by default: what the assistant does not understand is never sent anywhere unless this is on. */

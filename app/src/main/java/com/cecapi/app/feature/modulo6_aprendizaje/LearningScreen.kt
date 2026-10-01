@@ -90,7 +90,10 @@ fun LearningScreen(
     ) { granted -> if (granted) viewModel.onMicTapped() }
 
     val modes = ActivityMode.entries
-    val pagerState = rememberPagerState(initialPage = state.mode.ordinal) { modes.size }
+    // Una tarjeta más al final que no es un ejercicio calificado, solo ideas para divertirse —
+    // no tiene ActivityMode propio, así que las sincronizaciones de abajo la dejan en paz.
+    val totalPaginas = modes.size + 1
+    val pagerState = rememberPagerState(initialPage = state.mode.ordinal) { totalPaginas }
 
     // A voice command ("vibración"...) changes state.mode: follow it with the pager, unless the person is
     // the one mid-swipe right now (otherwise a swipe in progress would get yanked back).
@@ -100,10 +103,11 @@ fun LearningScreen(
             pagerState.animateScrollToPage(target)
         }
     }
-    // A finished swipe (or a tap on a dot) changes the mode, the same as the old buttons did.
+    // A finished swipe (or a tap on a dot) changes the mode, the same as the old buttons did — salvo en la
+    // última tarjeta (recreativas), que no corresponde a ningún ActivityMode.
     LaunchedEffect(pagerState) {
         snapshotFlow { pagerState.settledPage }.collect { page ->
-            val swiped = modes[page]
+            val swiped = modes.getOrNull(page) ?: return@collect
             if (swiped != state.mode) viewModel.setMode(swiped)
         }
     }
@@ -120,10 +124,13 @@ fun LearningScreen(
         )
 
         PageDots(
-            count = modes.size,
+            count = totalPaginas,
             current = pagerState.currentPage,
-            labels = listOf("Sonidos", "Vibración"),
-            onSelect = { page -> viewModel.setMode(modes[page]) },
+            labels = listOf("Sonidos", "Vibración", "Recreativas"),
+            onSelect = { page ->
+                modes.getOrNull(page)?.let { viewModel.setMode(it) }
+                    ?: run { /* "Recreativas": solo se desliza, no hay modo que cambiar */ }
+            },
         )
 
         HorizontalPager(
@@ -132,25 +139,30 @@ fun LearningScreen(
                 .fillMaxSize()
                 .weight(1f)
                 .semantics {
-                    contentDescription = "Tarjetas de actividades. Desliza a la izquierda o a la derecha para " +
-                        "cambiar entre sonidos y vibración."
+                    contentDescription = "Tarjetas de actividades. Desliza para cambiar entre sonidos, " +
+                        "vibración y actividades recreativas."
                 },
         ) { page ->
-            ActivityPage(
-                pageMode = modes[page],
-                state = state,
-                voiceState = voiceState,
-                onMicTapped = {
-                    val granted = ContextCompat.checkSelfPermission(
-                        context, Manifest.permission.RECORD_AUDIO,
-                    ) == PackageManager.PERMISSION_GRANTED
-                    if (granted) viewModel.onMicTapped() else permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-                },
-                onMicDoubleTap = viewModel::onMicDoubleTap,
-                onRepeat = viewModel::repeat,
-                onNext = viewModel::next,
-                onSetLevel = viewModel::setLevel,
-            )
+            val modo = modes.getOrNull(page)
+            if (modo != null) {
+                ActivityPage(
+                    pageMode = modo,
+                    state = state,
+                    voiceState = voiceState,
+                    onMicTapped = {
+                        val granted = ContextCompat.checkSelfPermission(
+                            context, Manifest.permission.RECORD_AUDIO,
+                        ) == PackageManager.PERMISSION_GRANTED
+                        if (granted) viewModel.onMicTapped() else permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                    },
+                    onMicDoubleTap = viewModel::onMicDoubleTap,
+                    onRepeat = viewModel::repeat,
+                    onNext = viewModel::next,
+                    onSetLevel = viewModel::setLevel,
+                )
+            } else {
+                RecreationalPage()
+            }
         }
     }
 }
@@ -301,6 +313,57 @@ private fun ActivityPage(
                 onClick = onNext,
             )
         }
+    }
+}
+
+/**
+ * Tercera tarjeta: ideas para divertirse y estimularse, no ejercicios calificados — primer borrador de
+ * contenido para ir trabajando con el Equipo 4, no algo terminado todavía.
+ */
+@Composable
+private fun RecreationalPage() {
+    Column(
+        modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(top = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Text(
+            "Ideas para divertirte y estimular tus sentidos, solo o en grupo. Esto es un primer borrador: " +
+                "iremos agregando y afinando más con el tiempo.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = CecapiTextMuted,
+        )
+        CategoriaRecreativa.entries.forEach { categoria ->
+            val actividades = RecreationalActivities.todas.filter { it.categoria == categoria }
+            if (actividades.isEmpty()) return@forEach
+            Text(
+                categoria.etiqueta.uppercase(),
+                style = MaterialTheme.typography.labelLarge,
+                color = CecapiAccent,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+            actividades.forEach { actividad -> ActividadRecreativaCard(actividad) }
+        }
+    }
+}
+
+@Composable
+private fun ActividadRecreativaCard(actividad: ActividadRecreativa) {
+    val shape = RoundedCornerShape(18.dp)
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(shape)
+            .background(CecapiSurface)
+            .voiceHint("${actividad.titulo}. ${actividad.descripcion}")
+            .padding(16.dp),
+    ) {
+        Text(actividad.titulo, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onBackground)
+        Text(
+            actividad.descripcion,
+            style = MaterialTheme.typography.bodyMedium,
+            color = CecapiTextMuted,
+            modifier = Modifier.padding(top = 4.dp),
+        )
     }
 }
 

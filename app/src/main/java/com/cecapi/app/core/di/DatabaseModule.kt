@@ -11,6 +11,7 @@ import com.cecapi.app.core.data.MIGRATION_2_3
 import com.cecapi.app.core.data.MIGRATION_3_4
 import com.cecapi.app.core.data.MIGRATION_4_5
 import com.cecapi.app.core.data.MIGRATION_5_6
+import com.cecapi.app.core.data.MIGRATION_6_7
 import com.cecapi.app.core.util.PasswordHasher
 import com.cecapi.app.feature.modulo3_asistenteinteligente.ConsultaIaDao
 import com.cecapi.app.feature.modulo3_asistenteinteligente.ContextoConversacionDao
@@ -61,7 +62,7 @@ object DatabaseModule {
         @ApplicationContext context: Context,
         databaseProvider: Provider<AppDatabase>,
     ): AppDatabase = Room.databaseBuilder(context, AppDatabase::class.java, "cecapi.db")
-        .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
+        .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
         .addCallback(object : androidx.room.RoomDatabase.Callback() {
             override fun onCreate(db: SupportSQLiteDatabase) {
                 super.onCreate(db)
@@ -135,6 +136,7 @@ object DatabaseModule {
                         put("fecha_registro", System.currentTimeMillis())
                         put("rol", demo.rol.codigo)
                         put("origen", demo.origen)
+                        put("validado", 1) // cuentas de prueba: ya confiables, no quedan pendientes de validar
                     },
                 )
             }

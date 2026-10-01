@@ -33,6 +33,25 @@ object RolePermissions {
         RolUsuario.fromCodigo(observador.rol) == RolUsuario.ADMINISTRADOR
 
     /**
+     * True when [observador] can mark [objetivo] as validado — the chain pedida: administrador valida
+     * directivo (y, al no tener límite, cualquiera); directivo valida educador de su institución; educador
+     * valida alumno (solo el suyo); administrador valida usuario independiente (nadie más los ve). No
+     * hace nada por sí sola — ingresar sigue funcionando sin validar, esto solo decide quién puede
+     * marcarlo. Ya validado, no hay nada que hacer.
+     */
+    fun puedeValidar(observador: UsuarioEntity, objetivo: UsuarioEntity): Boolean {
+        if (objetivo.validado) return false
+        val rolObservador = RolUsuario.fromCodigo(observador.rol)
+        val rolObjetivo = RolUsuario.fromCodigo(objetivo.rol)
+        return when (rolObservador) {
+            RolUsuario.ADMINISTRADOR -> true // sin límite: puede validar a cualquiera, no solo directivo/usuario
+            RolUsuario.DIRECTIVO -> rolObjetivo == RolUsuario.EDUCADOR && mismaInstitucion(observador, objetivo)
+            RolUsuario.EDUCADOR -> rolObjetivo == RolUsuario.ALUMNO && objetivo.educadorId == observador.id
+            RolUsuario.ALUMNO, RolUsuario.USUARIO -> false
+        }
+    }
+
+    /**
      * Where to send an incident [reportante] files. With an institution, it goes there (the educador feature
      * resolves a specific person later); an independent usuario has none, so it goes straight to the
      * administradores instead of being lost.

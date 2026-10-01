@@ -80,3 +80,15 @@ val MIGRATION_5_6 = object : Migration(5, 6) {
         db.execSQL("ALTER TABLE usuarios ADD COLUMN apodo TEXT")
     }
 }
+
+/**
+ * v7: who in the chain above an account (administrador > directivo > educador > alumno, or
+ * administrador > usuario) still needs to review it. Defaults new column to true so every account that
+ * already existed before this migration is not retroactively flagged pending; only accounts created from
+ * here on default to false (SessionRepository.register sets it explicitly either way).
+ */
+val MIGRATION_6_7 = object : Migration(6, 7) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE usuarios ADD COLUMN validado INTEGER NOT NULL DEFAULT 1")
+    }
+}
