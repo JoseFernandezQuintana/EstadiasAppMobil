@@ -315,6 +315,9 @@ class DocumentReaderViewModel @Inject constructor(
         leerParrafo(_uiState.value.parrafoActual)
     }
 
+    /** "Tomar otra foto" button on the giant reading-controls screen. */
+    fun onRetakePhoto() = nuevaFoto(tomarYa = false)
+
     /** Clears the last document so the next photo starts fresh. */
     private fun nuevaFoto(tomarYa: Boolean) {
         detenerLectura()

@@ -63,6 +63,10 @@ import com.cecapi.app.core.theme.CecapiTextPrimary
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.util.concurrent.Executors
+
+/** One background thread for live frame analysis, shared by every viewfinder so none is leaked. */
+private val analysisExecutor by lazy { Executors.newSingleThreadExecutor() }
 
 /**
  * The live camera picture shared by the text reader and the environment assistant. Calls [onReady]
@@ -96,19 +100,36 @@ fun CameraViewfinder(
                             p.setSurfaceProvider(previewView.surfaceProvider)
                         }
                         val capture = ImageCapture.Builder().build()
+                        // Its own background thread, not the main one: ML Kit's analyze() is called many
+                        // times a second and scheduling it on the main executor can visibly stutter the UI
+                        // on a slower phone. KEEP_ONLY_LATEST drops a queued frame if one is still being
+                        // analyzed, so the hint is never behind by several frames' worth of lag.
                         val analysis = analyzer?.let {
-                            ImageAnalysis.Builder().build().also { useCase ->
-                                useCase.setAnalyzer(ContextCompat.getMainExecutor(ctx), it)
-                            }
+                            ImageAnalysis.Builder()
+                                .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                                .build()
+                                .apply { setAnalyzer(analysisExecutor, it) }
                         }
                         try {
                             cameraProvider.unbindAll()
-                            val useCases = listOfNotNull(preview, capture, analysis).toTypedArray()
-                            cameraProvider.bindToLifecycle(
-                                lifecycleOwner,
-                                CameraSelector.DEFAULT_BACK_CAMERA,
-                                *useCases,
-                            )
+                            try {
+                                cameraProvider.bindToLifecycle(
+                                    lifecycleOwner,
+                                    CameraSelector.DEFAULT_BACK_CAMERA,
+                                    *listOfNotNull(preview, capture, analysis).toTypedArray(),
+                                )
+                            } catch (e: Exception) {
+                                // Some phones cannot run preview + capture + analysis together: keep the
+                                // camera working without the live framing hints rather than fail outright.
+                                if (analysis == null) throw e
+                                cameraProvider.unbindAll()
+                                cameraProvider.bindToLifecycle(
+                                    lifecycleOwner,
+                                    CameraSelector.DEFAULT_BACK_CAMERA,
+                                    preview,
+                                    capture,
+                                )
+                            }
                             onReady(capture)
                         } catch (_: Exception) {
                             // Camera unavailable (emulator without a virtual camera, etc.)
@@ -202,10 +223,11 @@ fun CaptureButton(
     help: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    size: androidx.compose.ui.unit.Dp = 104.dp,
 ) {
     Box(
         modifier = modifier
-            .size(104.dp)
+            .size(size)
             .clip(CircleShape)
             .border(4.dp, CecapiTextPrimary, CircleShape)
             .padding(8.dp)
@@ -217,13 +239,13 @@ fun CaptureButton(
         contentAlignment = Alignment.Center,
     ) {
         if (processing) {
-            CircularProgressIndicator(color = CecapiBackground, modifier = Modifier.size(40.dp))
+            CircularProgressIndicator(color = CecapiBackground, modifier = Modifier.size(size * 0.38f))
         } else {
             Icon(
                 Icons.Filled.Camera,
                 contentDescription = null,
                 tint = CecapiBackground,
-                modifier = Modifier.size(44.dp),
+                modifier = Modifier.size(size * 0.42f),
             )
         }
     }

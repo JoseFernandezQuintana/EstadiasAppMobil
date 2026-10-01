@@ -7,6 +7,8 @@ import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.core.ImageCapture
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,16 +17,26 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Replay
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -37,11 +49,23 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.cecapi.app.core.theme.CecapiAccent
 import com.cecapi.app.core.theme.CecapiBackground
+import com.cecapi.app.core.theme.CecapiBorder
+import com.cecapi.app.core.theme.CecapiError
+import com.cecapi.app.core.theme.CecapiSurfaceElevated
+import com.cecapi.app.core.theme.CecapiTextPrimary
+import com.cecapi.app.core.theme.ModuleCameraAccent
+import com.cecapi.app.core.theme.ModuleLearningAccent
 import com.cecapi.app.core.ui.ScreenTopBar
 import com.cecapi.app.core.ui.CameraViewfinder
 import com.cecapi.app.core.ui.CapturedPhotoPreview
@@ -51,6 +75,7 @@ import com.cecapi.app.core.ui.SuggestionChip
 import com.cecapi.app.core.ui.TopAction
 import com.cecapi.app.core.ui.capturePhoto
 import com.cecapi.app.core.ui.copyPickedImage
+import com.cecapi.app.core.ui.voiceHint
 import kotlinx.coroutines.launch
 import com.cecapi.app.core.ui.VoiceCaptionBubble
 
@@ -159,92 +184,155 @@ fun DocumentReaderScreen(
             )
         }
 
-        Column(
-            modifier = Modifier.fillMaxSize().padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            ScreenTopBar(
-                eyebrow = "CÁMARA",
-                title = "Leer texto",
-                onBack = onBack,
-                onCommands = viewModel::onCommandsRequested,
-            )
+        if (hayDocumento) {
+            // Pantalla de lectura: botones grandes de un solo tamaño en vez de iconos pequeños en fila —
+            // más fáciles de encontrar y de tocar bien para baja visión, manos con poco control fino o
+            // niños. El "volver al menú" va primero y gigante, igual que en el resto de la app.
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                BigActionCard(
+                    icon = Icons.Filled.Home,
+                    label = "VOLVER AL MENÚ",
+                    tint = CecapiError,
+                    help = "Volver al menú. Sale del lector de texto.",
+                    onClick = onBack,
+                )
 
-            Spacer(modifier = Modifier.weight(1f))
+                VoiceCaptionBubble(text = statusText ?: "")
 
-            VoiceCaptionBubble(text = statusText ?: "")
-
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
-                SuggestionChip(label = "toma la foto", onClick = viewModel::pedirCaptura)
-            }
-
-            if (hayDocumento) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(24.dp))
-                        .background(CecapiBackground.copy(alpha = 0.82f))
-                        .padding(vertical = 8.dp),
-                    horizontalArrangement = Arrangement.SpaceEvenly,
-                ) {
-                    TopAction(
-                        icon = Icons.Filled.Replay,
-                        label = "Repetir",
-                        help = "Repetir. Lee el documento otra vez desde el principio.",
-                        onClick = viewModel::repetirLectura,
-                    )
-                    TopAction(
+                BigActionCard(
+                    icon = if (uiState.estaLeyendo) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                    label = if (uiState.estaLeyendo) "PAUSAR LECTURA" else "REANUDAR LECTURA",
+                    tint = CecapiAccent,
+                    help = if (uiState.estaLeyendo) {
+                        "Pausar. Detiene la lectura hasta que digas continúa."
+                    } else {
+                        "Reanudar. Continúa leyendo el párrafo donde te quedaste."
+                    },
+                    onClick = if (uiState.estaLeyendo) viewModel::pausarLectura else viewModel::continuarLectura,
+                )
+                BigActionCard(
+                    icon = Icons.Filled.Replay,
+                    label = "REPETIR LECTURA",
+                    tint = ModuleLearningAccent,
+                    help = "Repetir. Lee el documento otra vez desde el principio.",
+                    onClick = viewModel::repetirLectura,
+                )
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    BigActionCard(
                         icon = Icons.Filled.SkipPrevious,
-                        label = "Anterior",
+                        label = "ANTERIOR",
+                        tint = CecapiBorder,
                         help = "Párrafo anterior. Vuelve un párrafo atrás.",
                         onClick = viewModel::anteriorParrafo,
+                        modifier = Modifier.weight(1f),
                     )
-                    if (uiState.estaLeyendo) {
-                        TopAction(
-                            icon = Icons.Filled.Pause,
-                            label = "Pausa",
-                            help = "Pausa. Detiene la lectura hasta que digas continúa.",
-                            onClick = viewModel::pausarLectura,
-                        )
-                    } else {
-                        TopAction(
-                            icon = Icons.Filled.PlayArrow,
-                            label = "Seguir",
-                            help = "Seguir. Continúa leyendo el párrafo donde te quedaste.",
-                            onClick = viewModel::continuarLectura,
-                        )
-                    }
-                    TopAction(
+                    BigActionCard(
                         icon = Icons.Filled.SkipNext,
-                        label = "Siguiente",
+                        label = "SIGUIENTE",
+                        tint = CecapiBorder,
                         help = "Párrafo siguiente. Salta al siguiente párrafo.",
                         onClick = viewModel::siguienteParrafo,
+                        modifier = Modifier.weight(1f),
                     )
                 }
+                BigActionCard(
+                    icon = Icons.Filled.CameraAlt,
+                    label = "TOMAR OTRA FOTO",
+                    tint = ModuleCameraAccent,
+                    help = "Tomar otra foto. Vuelve a la cámara para leer un papel distinto.",
+                    onClick = viewModel::onRetakePhoto,
+                )
             }
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceEvenly,
-                verticalAlignment = Alignment.CenterVertically,
+        } else {
+            Column(
+                modifier = Modifier.fillMaxSize().padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                TopAction(
-                    icon = Icons.Filled.PhotoLibrary,
-                    label = "Mis fotos",
-                    help = "Mis fotos. Abre el selector de fotos de tu teléfono para que elijas una imagen que ya tienes. " +
-                        "La aplicación solo ve la foto que tú elijas. También puedes decir: elige una foto.",
-                    onClick = viewModel::pedirGaleria,
+                ScreenTopBar(
+                    eyebrow = "CÁMARA",
+                    title = "Leer texto",
+                    onBack = onBack,
+                    onCommands = viewModel::onCommandsRequested,
                 )
-                CaptureButton(
-                    processing = uiState.isProcessing,
-                    enabled = imageCapture != null && !uiState.isProcessing,
-                    help = "Botón de captura. Tócalo para prepararte y tócalo otra vez para tomar la foto. " +
-                        "También puedes decir: toma la foto.",
-                    onClick = { if (viewModel.onBotonCapturaPresionado()) takePhoto() },
-                )
-                // Same width as the button on the left, so the shutter stays centered.
-                Spacer(modifier = Modifier.width(76.dp))
+
+                Spacer(modifier = Modifier.weight(1f))
+
+                VoiceCaptionBubble(text = statusText ?: "")
+
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
+                    SuggestionChip(label = "toma la foto", onClick = viewModel::pedirCaptura)
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    TopAction(
+                        icon = Icons.Filled.PhotoLibrary,
+                        label = "Mis fotos",
+                        help = "Mis fotos. Abre el selector de fotos de tu teléfono para que elijas una imagen que ya tienes. " +
+                            "La aplicación solo ve la foto que tú elijas. También puedes decir: elige una foto.",
+                        onClick = viewModel::pedirGaleria,
+                    )
+                    CaptureButton(
+                        processing = uiState.isProcessing,
+                        enabled = imageCapture != null && !uiState.isProcessing,
+                        help = "Botón de captura. Tócalo para prepararte y tócalo otra vez para tomar la foto. " +
+                            "También puedes decir: toma la foto.",
+                        onClick = { if (viewModel.onBotonCapturaPresionado()) takePhoto() },
+                        size = 136.dp,
+                    )
+                    // Same width as the button on the left, so the shutter stays centered.
+                    Spacer(modifier = Modifier.width(76.dp))
+                }
             }
         }
+    }
+}
+
+/** One full-width, same-size button: a big icon badge plus a big bold label, easy to find and tap. */
+@Composable
+private fun BigActionCard(
+    icon: ImageVector,
+    label: String,
+    tint: Color,
+    help: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val shape = RoundedCornerShape(24.dp)
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .heightIn(min = 76.dp)
+            .clip(shape)
+            .background(CecapiSurfaceElevated)
+            .border(2.dp, tint, shape)
+            .clickable(onClick = onClick)
+            .semantics { contentDescription = help }
+            .voiceHint(help)
+            .padding(16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.Center,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(52.dp)
+                .clip(CircleShape)
+                .background(tint.copy(alpha = 0.2f))
+                .border(2.dp, tint, CircleShape),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(30.dp))
+        }
+        Spacer(modifier = Modifier.width(14.dp))
+        Text(label, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = CecapiTextPrimary)
     }
 }
