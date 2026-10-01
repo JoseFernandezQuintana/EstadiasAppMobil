@@ -34,6 +34,7 @@ import com.cecapi.app.core.voice.GlobalVoiceCommands
 import com.cecapi.app.core.voice.LaunchRequests
 import com.cecapi.app.core.voice.ScreenContext
 import com.cecapi.app.feature.modulo1_aplicacionprincipal.AssistCommands
+import com.cecapi.app.feature.modulo3_asistenteinteligente.AiResolverSetup
 import com.cecapi.app.core.voice.VoiceEngine
 import com.cecapi.app.core.voice.WakeWordController
 import androidx.lifecycle.lifecycleScope
@@ -54,6 +55,10 @@ class MainActivity : ComponentActivity() {
 
     // Injecting it registers the commands that teach the app and adjust the voice by profile.
     @Inject lateinit var assistCommands: AssistCommands
+
+    // Injecting it is what connects "no entendí" to the AI backend; without this, the switch in
+    // Configuración turns a gate on that has nothing behind it.
+    @Inject lateinit var aiResolverSetup: AiResolverSetup
 
     // Injecting it is what makes the saved voice speed and cue settings apply at startup.
     @Inject lateinit var deviceSettings: DeviceSettings

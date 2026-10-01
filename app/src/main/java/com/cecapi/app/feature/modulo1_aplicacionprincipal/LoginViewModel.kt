@@ -119,20 +119,33 @@ class LoginViewModel @Inject constructor(
 
     private fun captureUsername(text: String) {
         step = LoginVoiceStep.COMMAND
-        if (VoiceText.normalize(text) in CANCEL_WORDS) {
-            voiceEngine.speak("De acuerdo. Di usuario, contraseña o ingresar.", listenAfter = true)
-            return
-        }
+        if (wantsToLeaveWhileCapturing(text)) return
         applyUsername(text)
     }
 
     private fun capturePassword(text: String) {
         step = LoginVoiceStep.COMMAND
-        if (VoiceText.normalize(text) in CANCEL_WORDS) {
-            voiceEngine.speak("De acuerdo. Di usuario, contraseña o ingresar.", listenAfter = true)
-            return
-        }
+        if (wantsToLeaveWhileCapturing(text)) return
         applyPasswordAndSubmit(text)
+    }
+
+    /**
+     * While dictating the username or password, "regresar"/"salir" must leave the login screen like
+     * they do everywhere else — not get typed in as if they were the username or password. A softer
+     * "cancelar"/"no" just cancels this one field and stays, asking again.
+     */
+    private fun wantsToLeaveWhileCapturing(text: String): Boolean {
+        val words = VoiceText.normalize(text)
+        if (VoiceText.hasAny(words, EXIT_PHRASES)) {
+            voiceEngine.speak("Volviendo al inicio.")
+            _back.tryEmit(Unit)
+            return true
+        }
+        if (words in CANCEL_WORDS) {
+            voiceEngine.speak("De acuerdo. Di usuario, contraseña o ingresar.", listenAfter = true)
+            return true
+        }
+        return false
     }
 
     /** Usernames are stored in UPPERCASE without spaces, so a spoken one matches however it was heard. */

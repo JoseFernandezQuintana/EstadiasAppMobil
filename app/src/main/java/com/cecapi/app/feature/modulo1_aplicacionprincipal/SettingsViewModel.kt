@@ -112,7 +112,11 @@ class SettingsViewModel @Inject constructor(
             voiceEngine.rawInput = false
         }
         when {
-            // Borrar la cuenta pide, además del "sí", la contraseña: mientras se espera, cualquier frase es el
+            // Antes de tratar lo dicho como el intento de contraseña: si la persona quiere salir de ahí
+            // ("regresar", "salir"...), eso debe cancelar el borrado, no fallar como si fuera una contraseña mala.
+            awaitingPassword && has("atras", "volver", "vuelve", "regresa", "regresar", "salir", "cancelar", "cancela", "menu", "inicio") ->
+                cancelDeleteAccount()
+            // Borrar la cuenta pide, además del "sí", la contraseña: mientras se espera, cualquier otra frase es el
             // intento, no un comando (igual que el usuario y la contraseña al iniciar sesión).
             awaitingPassword -> checkDeletePassword(spoken)
             CommandCatalog.isRequest(spoken) -> voiceEngine.speak(CommandCatalog.SETTINGS, listenAfter = true)
