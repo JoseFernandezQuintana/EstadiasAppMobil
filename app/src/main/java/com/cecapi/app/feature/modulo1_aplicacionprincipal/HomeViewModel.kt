@@ -8,6 +8,8 @@ import com.cecapi.app.core.ui.MenuItem
 import com.cecapi.app.core.util.ConnectivityObserver
 import com.cecapi.app.core.util.PhoneStatusReader
 import com.cecapi.app.core.util.VolumeControl
+import com.cecapi.app.core.util.WikidataFact
+import com.cecapi.app.core.util.WikidataLookup
 import com.cecapi.app.core.util.WikipediaLookup
 import com.cecapi.app.core.voice.VoiceMessages
 import com.cecapi.app.core.voice.VoiceText
@@ -56,6 +58,7 @@ class HomeViewModel @Inject constructor(
     private val sessionRepository: SessionRepository,
     private val connectivityObserver: ConnectivityObserver,
     private val wikipediaLookup: WikipediaLookup,
+    private val wikidataLookup: WikidataLookup,
 ) : ViewModel() {
 
     val voiceState: StateFlow<VoiceState> = voiceEngine.state.stateIn(
@@ -287,13 +290,30 @@ class HomeViewModel @Inject constructor(
      * internet, it gets one chance to turn the phrase into a command we know; otherwise we say so.
      */
     private fun notUnderstood(text: String, allowFallback: Boolean) {
+        val fact = wikidataLookup.matchFact(text)
         val wikiQuery = wikiQuery(text)
         when {
+            // A specific, structured fact ("cuándo nació", "capital de", "población de"...) goes first:
+            // Wikidata answers it more precisely than hunting for the number in Wikipedia's prose.
+            allowFallback && fact != null && isOnline.value -> askWikidataFact(fact)
             allowFallback && intentFallback.resolver != null && isOnline.value -> askAi(text, deep = false)
             // The AI is off (its providers do not allow minors) or not connected yet: Wikipedia still helps
             // with a plain "qué es / quién fue / busca..." when there is internet, without needing an account.
             allowFallback && wikiQuery != null && isOnline.value -> askWikipedia(wikiQuery)
             else -> sayNotUnderstood()
+        }
+    }
+
+    /** A structured fact from Wikidata; falls back to the AI or a plain Wikipedia search if it has none. */
+    private fun askWikidataFact(fact: WikidataFact) {
+        voiceEngine.speak("Buscando el dato.")
+        viewModelScope.launch {
+            val answer = runCatching { wikidataLookup.answer(fact) }.getOrNull()
+            when {
+                answer != null -> voiceEngine.speak(answer, listenAfter = true)
+                intentFallback.resolver != null && isOnline.value -> askAi(fact.subject, deep = false)
+                else -> askWikipedia(fact.subject)
+            }
         }
     }
 
