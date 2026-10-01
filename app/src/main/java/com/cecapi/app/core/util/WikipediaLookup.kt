@@ -1,5 +1,6 @@
 package com.cecapi.app.core.util
 
+import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
@@ -39,6 +40,10 @@ class WikipediaLookup @Inject constructor() {
                 title = title,
             )
         } catch (e: Exception) {
+            // Not asserted on since this already returns null to the person either way; this only exists so
+            // the next time every query comes back empty, logcat says why instead of leaving us to guess
+            // between "no network", "Wikipedia changed its response shape" and "genuinely no article".
+            Log.w(TAG, "search(\"$query\") failed", e)
             null
         }
     }
@@ -47,7 +52,15 @@ class WikipediaLookup @Inject constructor() {
         val url = "https://es.wikipedia.org/w/api.php?action=query&list=search&format=json&srlimit=1&srsearch=" +
             URLEncoder.encode(query, "UTF-8")
         val body = get(url) ?: return null
-        val results = JSONObject(body).optJSONObject("query")?.optJSONArray("search") ?: return null
+        val results = JSONObject(body).optJSONObject("query")?.optJSONArray("search")
+        if (results == null) {
+            Log.w(TAG, "findTitle(\"$query\"): unexpected response shape: $body")
+            return null
+        }
+        if (results.length() == 0) {
+            Log.d(TAG, "findTitle(\"$query\"): Wikipedia returned zero results")
+            return null
+        }
         return results.optJSONObject(0)?.optString("title")?.takeIf { it.isNotBlank() }
     }
 
@@ -68,7 +81,10 @@ class WikipediaLookup @Inject constructor() {
             setRequestProperty("User-Agent", "CECAPI-App/1.0 (accesibilidad; proyecto de estadía)")
         }
         return try {
-            if (connection.responseCode !in 200..299) return null
+            if (connection.responseCode !in 200..299) {
+                Log.w(TAG, "GET $urlString -> HTTP ${connection.responseCode}")
+                return null
+            }
             connection.inputStream.bufferedReader(StandardCharsets.UTF_8).use { it.readText() }
         } finally {
             connection.disconnect()
@@ -83,6 +99,7 @@ class WikipediaLookup @Inject constructor() {
     }
 
     private companion object {
+        const val TAG = "WikipediaLookup"
         const val SHORT_ANSWER_CHARS = 220
     }
 }

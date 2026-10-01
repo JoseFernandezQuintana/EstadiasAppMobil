@@ -160,6 +160,22 @@ class DocumentReaderViewModel @Inject constructor(
         voiceEngine.speak("Sin el permiso de la cámara no puedo leer. Actívalo en los ajustes de la aplicación.")
     }
 
+    /** The last framing hint said out loud, so the same one is not repeated every ~700 ms while aiming. */
+    private var ultimoFramingHint: FramingHint? = null
+
+    /**
+     * Live guidance from [TextFramingAnalyzer] while aiming, before the photo is taken: "muévelo a la
+     * izquierda", "acércalo"... Only while there is a live preview to aim (no photo yet, nothing being
+     * read) and only when it actually changed, so it narrates instead of repeating the same line forever.
+     */
+    fun onFramingHint(hint: FramingHint) {
+        val state = _uiState.value
+        if (state.photoPath != null || state.isProcessing || state.parrafos.isNotEmpty()) return
+        if (hint == ultimoFramingHint) return
+        ultimoFramingHint = hint
+        voiceEngine.speak(hint.mensaje)
+    }
+
     /**
      * "Elige una foto": opens the system picture picker. The person picks one picture and the app sees only
      * that one; there is no permission to the whole gallery. Said out loud first so it is always their decision.
@@ -303,6 +319,7 @@ class DocumentReaderViewModel @Inject constructor(
     private fun nuevaFoto(tomarYa: Boolean) {
         detenerLectura()
         _uiState.value = DocumentReaderUiState()
+        ultimoFramingHint = null
         if (tomarYa) {
             pedirCaptura()
         } else {

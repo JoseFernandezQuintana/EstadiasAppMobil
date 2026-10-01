@@ -3,6 +3,7 @@ package com.cecapi.app.core.ui
 import android.content.Context
 import android.net.Uri
 import androidx.camera.core.CameraSelector
+import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageCapture
 import androidx.camera.core.ImageCaptureException
 import androidx.camera.core.Preview
@@ -66,12 +67,17 @@ import java.io.File
 /**
  * The live camera picture shared by the text reader and the environment assistant. Calls [onReady]
  * with the capture use case once the camera is running, or with null if the camera cannot start.
+ * [analyzer], when given, also runs on every preview frame (e.g. the text reader's live framing
+ * guidance) — [CameraViewfinder] only wires it in; the caller owns its lifecycle (creating it with
+ * `remember` and closing it in a `DisposableEffect`), since this component has no idea what kind of
+ * analyzer it is or what closing it means.
  */
 @Composable
 fun CameraViewfinder(
     hasPermission: Boolean,
     onReady: (ImageCapture?) -> Unit,
     modifier: Modifier = Modifier,
+    analyzer: ImageAnalysis.Analyzer? = null,
 ) {
     val lifecycleOwner = LocalLifecycleOwner.current
     Box(
@@ -90,13 +96,18 @@ fun CameraViewfinder(
                             p.setSurfaceProvider(previewView.surfaceProvider)
                         }
                         val capture = ImageCapture.Builder().build()
+                        val analysis = analyzer?.let {
+                            ImageAnalysis.Builder().build().also { useCase ->
+                                useCase.setAnalyzer(ContextCompat.getMainExecutor(ctx), it)
+                            }
+                        }
                         try {
                             cameraProvider.unbindAll()
+                            val useCases = listOfNotNull(preview, capture, analysis).toTypedArray()
                             cameraProvider.bindToLifecycle(
                                 lifecycleOwner,
                                 CameraSelector.DEFAULT_BACK_CAMERA,
-                                preview,
-                                capture,
+                                *useCases,
                             )
                             onReady(capture)
                         } catch (_: Exception) {

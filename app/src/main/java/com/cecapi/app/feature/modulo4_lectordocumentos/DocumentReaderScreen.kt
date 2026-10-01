@@ -26,6 +26,7 @@ import androidx.compose.material.icons.filled.Replay
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -80,6 +81,12 @@ fun DocumentReaderScreen(
     }
 
     var imageCapture by remember { mutableStateOf<ImageCapture?>(null) }
+
+    // Lives on the screen (not the ViewModel): it holds an ML Kit recognizer that must close with the
+    // camera, not survive configuration changes. Told "así está bien, toca el botón" and where to move the
+    // phone, said out loud, since there is no viewfinder to look at for someone who cannot see it.
+    val framingAnalyzer = remember { TextFramingAnalyzer(onHint = viewModel::onFramingHint) }
+    DisposableEffect(Unit) { onDispose { framingAnalyzer.close() } }
 
     val takePhoto: () -> Unit = {
         val capture = imageCapture
@@ -139,6 +146,7 @@ fun DocumentReaderScreen(
                 hasPermission = hasCameraPermission,
                 onReady = { imageCapture = it },
                 modifier = Modifier.fillMaxSize(),
+                analyzer = framingAnalyzer,
             )
         }
 
