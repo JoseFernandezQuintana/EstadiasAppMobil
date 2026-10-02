@@ -57,7 +57,7 @@ import com.cecapi.app.core.voice.VoiceState
 
 @Composable
 fun LearningScreen(
-    onBack: () -> Unit,
+    onBack: () -> Unit = {},
     viewModel: LearningViewModel = hiltViewModel(),
 ) {
     val context = LocalContext.current

@@ -103,7 +103,7 @@ class LearningRepository @Inject constructor(
         distancia("Silbido", "silbido", cerca = false, 2),
 
         // =====================================================================
-        // NIVEL 3 — efecto 8D (12 de 12 activos)
+        // NIVEL 3 — efecto 8D (6 de 12 activos: izquierda/derecha; enfrente/atrás pendiente para el 17 de octubre)
         // Izquierda/derecha usan UN solo archivo por tono y la app hace el
         // paneo en tiempo real con el volumen (igual que los otros niveles).
         // Enfrente/atrás usan un archivo DISTINTO por posición (ver
