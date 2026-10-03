@@ -12,8 +12,17 @@ import java.nio.charset.StandardCharsets
 import javax.inject.Inject
 import javax.inject.Singleton
 
+/** What `/entender` decided: a module to open ([moduleCode], a [com.cecapi.app.core.model.ModuloCecapi.storageCode]) or an [answer]. */
+data class AiUnderstanding(
+    val moduleCode: String? = null,
+    val answer: String? = null,
+)
+
 interface AiAssistantApi {
     suspend fun ask(pregunta: String, contexto: List<String>): Result<String>
+
+    /** Like [ask], but the backend first checks whether the phrase names a module to open. */
+    suspend fun understand(pregunta: String, contexto: List<String>): Result<AiUnderstanding>
 }
 
 /**
@@ -29,11 +38,12 @@ interface AiAssistantApi {
  * another provider later never touches this file or any other Android code,
  * since the app only ever talks to your own endpoint below.
  *
- * Expected backend contract (build this endpoint — e.g. Python + FastAPI —
- * calling the Gemini API server-side):
- *   POST {AI_PROXY_BASE_URL}
+ * Backend contract (see backend/README.md):
+ *   POST {AI_PROXY_BASE_URL}   (ends in /preguntar)
  *   body:     {"pregunta": "...", "contexto": ["turno 1", "turno 2", ...]}
  *   response: {"respuesta": "..."}
+ *   POST <same server>/entender   (same body)
+ *   response: {"tipo": "comando", "comando": "<storageCode>"} or {"tipo": "respuesta", "respuesta": "..."}
  */
 @Singleton
 class ProxyAiAssistantApi @Inject constructor(
@@ -41,6 +51,26 @@ class ProxyAiAssistantApi @Inject constructor(
 ) : AiAssistantApi {
 
     override suspend fun ask(pregunta: String, contexto: List<String>): Result<String> =
+        post("/preguntar", pregunta, contexto).mapCatching { it.getString("respuesta") }
+
+    override suspend fun understand(pregunta: String, contexto: List<String>): Result<AiUnderstanding> {
+        val resultado = post("/entender", pregunta, contexto)
+        // A backend from before /entender existed answers 404: ask it the plain way instead of failing.
+        if ((resultado.exceptionOrNull() as? HttpError)?.code == HttpURLConnection.HTTP_NOT_FOUND) {
+            return ask(pregunta, contexto).map { AiUnderstanding(answer = it) }
+        }
+        return resultado.mapCatching { json ->
+            if (json.optString("tipo") == "comando") {
+                AiUnderstanding(moduleCode = json.getString("comando"))
+            } else {
+                AiUnderstanding(answer = json.getString("respuesta"))
+            }
+        }
+    }
+
+    private class HttpError(val code: Int) : IllegalStateException("El asistente no respondió (código $code).")
+
+    private suspend fun post(path: String, pregunta: String, contexto: List<String>): Result<JSONObject> =
         withContext(Dispatchers.IO) {
             // The person turns this on in Configuración; off by default (AI providers do not allow minors).
             // Checked here, at the one place that actually reaches the network, so no caller can bypass it.
@@ -50,7 +80,9 @@ class ProxyAiAssistantApi @Inject constructor(
                 )
             }
             try {
-                val url = URL(BuildConfig.AI_PROXY_BASE_URL)
+                // The setting may be the server ("http://IP:8000") or the old full URL (".../preguntar"): both work.
+                val base = BuildConfig.AI_PROXY_BASE_URL.trimEnd('/').removeSuffix("/preguntar")
+                val url = URL(base + path)
                 val connection = (url.openConnection() as HttpURLConnection).apply {
                     requestMethod = "POST"
                     doOutput = true
@@ -67,14 +99,11 @@ class ProxyAiAssistantApi @Inject constructor(
                 connection.outputStream.use { it.write(body.toString().toByteArray(StandardCharsets.UTF_8)) }
 
                 if (connection.responseCode !in 200..299) {
-                    return@withContext Result.failure(
-                        IllegalStateException("El asistente no respondió (código ${connection.responseCode})."),
-                    )
+                    return@withContext Result.failure(HttpError(connection.responseCode))
                 }
 
                 val responseText = connection.inputStream.bufferedReader().use { it.readText() }
-                val respuesta = JSONObject(responseText).getString("respuesta")
-                Result.success(respuesta)
+                Result.success(JSONObject(responseText))
             } catch (error: Exception) {
                 Result.failure(error)
             }
