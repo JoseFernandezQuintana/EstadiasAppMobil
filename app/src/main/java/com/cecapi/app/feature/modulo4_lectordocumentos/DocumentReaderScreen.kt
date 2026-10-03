@@ -22,12 +22,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CameraAlt
-import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.AddAPhoto
+import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.MicOff
 import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
@@ -55,20 +56,19 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.cecapi.app.core.theme.CecapiAccent
 import com.cecapi.app.core.theme.CecapiBackground
 import com.cecapi.app.core.theme.CecapiBorder
-import com.cecapi.app.core.theme.CecapiError
 import com.cecapi.app.core.theme.CecapiSurfaceElevated
 import com.cecapi.app.core.theme.CecapiTextPrimary
 import com.cecapi.app.core.theme.ModuleCameraAccent
 import com.cecapi.app.core.theme.ModuleLearningAccent
 import com.cecapi.app.core.ui.ScreenTopBar
 import com.cecapi.app.core.ui.CameraViewfinder
-import com.cecapi.app.core.ui.CapturedPhotoPreview
 import com.cecapi.app.core.ui.CaptureButton
 import com.cecapi.app.core.ui.FramingGuide
 import com.cecapi.app.core.ui.SuggestionChip
@@ -76,8 +76,8 @@ import com.cecapi.app.core.ui.TopAction
 import com.cecapi.app.core.ui.capturePhoto
 import com.cecapi.app.core.ui.copyPickedImage
 import com.cecapi.app.core.ui.voiceHint
+import com.cecapi.app.core.voice.VoiceState
 import kotlinx.coroutines.launch
-import com.cecapi.app.core.ui.VoiceCaptionBubble
 
 @Composable
 fun DocumentReaderScreen(
@@ -87,6 +87,7 @@ fun DocumentReaderScreen(
 ) {
     val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsState()
+    val voiceState by viewModel.voiceState.collectAsState()
 
     var hasCameraPermission by remember {
         mutableStateOf(
@@ -148,34 +149,99 @@ fun DocumentReaderScreen(
         }
     }
 
-    // El texto reconocido nunca se muestra: solo se narra por voz. Aquí solo
-    // reflejamos el estado de la lectura para la burbuja de estado.
-    val statusText = when {
-        uiState.errorMessage != null -> uiState.errorMessage
-        uiState.isProcessing -> "Procesando la imagen."
-        uiState.estaLeyendo -> "Leyendo el párrafo ${uiState.parrafoActual + 1} de ${uiState.parrafos.size}."
-        uiState.capturaArmada -> "Toca otra vez para tomar la foto."
-        uiState.parrafos.isNotEmpty() -> "Lectura en pausa. Di continúa, repite o toma otra foto."
-        else -> "Apunta la cámara a un papel, un cartel o una etiqueta y di toma la foto."
-    }
     val hayDocumento = uiState.parrafos.isNotEmpty()
 
-    Box(modifier = Modifier.fillMaxSize()) {
-        // Once there is a photo, it takes over this area — its own place to look at, separate from the
-        // live feed — instead of a live camera nobody is watching anymore while the text is being read.
-        val photoPath = uiState.photoPath
-        if (photoPath != null) {
-            CapturedPhotoPreview(path = photoPath, modifier = Modifier.fillMaxSize())
-        } else {
-            CameraViewfinder(
-                hasPermission = hasCameraPermission,
-                onReady = { imageCapture = it },
-                modifier = Modifier.fillMaxSize(),
-                analyzer = framingAnalyzer,
-            )
+    if (hayDocumento) {
+        // Panel de lectura: fondo negro plano (ya no se ve la foto capturada detrás), encabezado
+        // compacto (no el ScreenTopBar grande de las demás pantallas) y un botón grande por acción,
+        // tal cual el panel de lectura del rediseño de Figma Make.
+        Column(modifier = Modifier.fillMaxSize().background(Color.Black)) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 56.dp)
+                    .padding(horizontal = 16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("Leer texto", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Black, color = CecapiTextPrimary)
+            }
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .verticalScroll(rememberScrollState())
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Text(
+                    "Párrafo ${uiState.parrafoActual + 1} de ${uiState.parrafos.size}.",
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.Black,
+                    color = CecapiTextPrimary,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                BigActionCard(
+                    icon = Icons.AutoMirrored.Filled.ArrowBack,
+                    label = "Volver al menú",
+                    tint = CecapiTextPrimary,
+                    help = "Volver al menú. Sale del lector de texto.",
+                    onClick = onBack,
+                )
+                BigActionCard(
+                    icon = Icons.Filled.AddAPhoto,
+                    label = "TOMAR OTRA FOTO",
+                    tint = ModuleCameraAccent,
+                    help = "Tomar otra foto. Vuelve a la cámara para leer un papel distinto.",
+                    onClick = viewModel::onRetakePhoto,
+                )
+                BigActionCard(
+                    icon = if (uiState.estaLeyendo) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                    label = if (uiState.estaLeyendo) "PAUSAR" else "CONTINUAR",
+                    tint = CecapiAccent,
+                    help = if (uiState.estaLeyendo) {
+                        "Pausar. Detiene la lectura hasta que digas continúa."
+                    } else {
+                        "Continuar. Sigue leyendo el párrafo donde te quedaste."
+                    },
+                    onClick = if (uiState.estaLeyendo) viewModel::pausarLectura else viewModel::continuarLectura,
+                )
+                BigActionCard(
+                    icon = Icons.Filled.Replay,
+                    label = "REPETIR",
+                    tint = ModuleCameraAccent,
+                    help = "Repetir. Lee el documento otra vez desde el principio.",
+                    onClick = viewModel::repetirLectura,
+                )
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    BigActionCard(
+                        icon = Icons.Filled.SkipPrevious,
+                        label = "ANTERIOR",
+                        tint = ModuleCameraAccent,
+                        help = "Párrafo anterior. Vuelve un párrafo atrás.",
+                        onClick = viewModel::anteriorParrafo,
+                        modifier = Modifier.weight(1f),
+                    )
+                    BigActionCard(
+                        icon = Icons.Filled.SkipNext,
+                        label = "SIGUIENTE",
+                        tint = ModuleCameraAccent,
+                        help = "Párrafo siguiente. Salta al siguiente párrafo.",
+                        onClick = viewModel::siguienteParrafo,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            }
         }
+    } else {
+    Box(modifier = Modifier.fillMaxSize()) {
+        CameraViewfinder(
+            hasPermission = hasCameraPermission,
+            onReady = { imageCapture = it },
+            modifier = Modifier.fillMaxSize(),
+            analyzer = framingAnalyzer,
+        )
 
-        if (hasCameraPermission && photoPath == null) {
+        if (hasCameraPermission) {
             FramingGuide(
                 modifier = Modifier
                     .align(Alignment.Center)
@@ -184,72 +250,6 @@ fun DocumentReaderScreen(
             )
         }
 
-        if (hayDocumento) {
-            // Pantalla de lectura: botones grandes de un solo tamaño en vez de iconos pequeños en fila —
-            // más fáciles de encontrar y de tocar bien para baja visión, manos con poco control fino o
-            // niños. El "volver al menú" va primero y gigante, igual que en el resto de la app.
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .verticalScroll(rememberScrollState())
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                BigActionCard(
-                    icon = Icons.Filled.Home,
-                    label = "VOLVER AL MENÚ",
-                    tint = CecapiError,
-                    help = "Volver al menú. Sale del lector de texto.",
-                    onClick = onBack,
-                )
-
-                VoiceCaptionBubble(text = statusText ?: "")
-
-                BigActionCard(
-                    icon = if (uiState.estaLeyendo) Icons.Filled.Pause else Icons.Filled.PlayArrow,
-                    label = if (uiState.estaLeyendo) "PAUSAR LECTURA" else "REANUDAR LECTURA",
-                    tint = CecapiAccent,
-                    help = if (uiState.estaLeyendo) {
-                        "Pausar. Detiene la lectura hasta que digas continúa."
-                    } else {
-                        "Reanudar. Continúa leyendo el párrafo donde te quedaste."
-                    },
-                    onClick = if (uiState.estaLeyendo) viewModel::pausarLectura else viewModel::continuarLectura,
-                )
-                BigActionCard(
-                    icon = Icons.Filled.Replay,
-                    label = "REPETIR LECTURA",
-                    tint = ModuleLearningAccent,
-                    help = "Repetir. Lee el documento otra vez desde el principio.",
-                    onClick = viewModel::repetirLectura,
-                )
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    BigActionCard(
-                        icon = Icons.Filled.SkipPrevious,
-                        label = "ANTERIOR",
-                        tint = CecapiBorder,
-                        help = "Párrafo anterior. Vuelve un párrafo atrás.",
-                        onClick = viewModel::anteriorParrafo,
-                        modifier = Modifier.weight(1f),
-                    )
-                    BigActionCard(
-                        icon = Icons.Filled.SkipNext,
-                        label = "SIGUIENTE",
-                        tint = CecapiBorder,
-                        help = "Párrafo siguiente. Salta al siguiente párrafo.",
-                        onClick = viewModel::siguienteParrafo,
-                        modifier = Modifier.weight(1f),
-                    )
-                }
-                BigActionCard(
-                    icon = Icons.Filled.CameraAlt,
-                    label = "TOMAR OTRA FOTO",
-                    tint = ModuleCameraAccent,
-                    help = "Tomar otra foto. Vuelve a la cámara para leer un papel distinto.",
-                    onClick = viewModel::onRetakePhoto,
-                )
-            }
-        } else {
             Column(
                 modifier = Modifier.fillMaxSize().padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -262,8 +262,6 @@ fun DocumentReaderScreen(
                 )
 
                 Spacer(modifier = Modifier.weight(1f))
-
-                VoiceCaptionBubble(text = statusText ?: "")
 
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
                     SuggestionChip(label = "toma la foto", onClick = viewModel::pedirCaptura)
@@ -289,8 +287,17 @@ fun DocumentReaderScreen(
                         onClick = { if (viewModel.onBotonCapturaPresionado()) takePhoto() },
                         size = 136.dp,
                     )
-                    // Same width as the button on the left, so the shutter stays centered.
-                    Spacer(modifier = Modifier.width(76.dp))
+                    // Mismo ancho que "Mis fotos" para que el obturador quede centrado, pero ahora es
+                    // un micrófono real — no solo un espacio vacío — para no depender de que alguien
+                    // adivine que ya está escuchando.
+                    val listening = voiceState is VoiceState.Listening
+                    TopAction(
+                        icon = if (listening) Icons.Filled.MicOff else Icons.Filled.Mic,
+                        label = if (listening) "Escuchando" else "Hablar",
+                        help = "Micrófono. Tócalo para hablar — toca la foto, o describe lo que necesitas.",
+                        tint = if (listening) CecapiAccent else CecapiTextPrimary,
+                        onClick = viewModel::onMicTapped,
+                    )
                 }
             }
         }
@@ -307,7 +314,7 @@ private fun BigActionCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val shape = RoundedCornerShape(24.dp)
+    val shape = RoundedCornerShape(20.dp)
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -322,12 +329,13 @@ private fun BigActionCard(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.Center,
     ) {
+        val iconShape = RoundedCornerShape(15.dp)
         Box(
             modifier = Modifier
                 .size(52.dp)
-                .clip(CircleShape)
+                .clip(iconShape)
                 .background(tint.copy(alpha = 0.2f))
-                .border(2.dp, tint, CircleShape),
+                .border(2.dp, tint, iconShape),
             contentAlignment = Alignment.Center,
         ) {
             Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(30.dp))

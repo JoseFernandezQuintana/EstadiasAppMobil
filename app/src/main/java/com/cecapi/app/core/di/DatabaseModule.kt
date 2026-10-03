@@ -12,6 +12,8 @@ import com.cecapi.app.core.data.MIGRATION_3_4
 import com.cecapi.app.core.data.MIGRATION_4_5
 import com.cecapi.app.core.data.MIGRATION_5_6
 import com.cecapi.app.core.data.MIGRATION_6_7
+import com.cecapi.app.core.data.MIGRATION_7_8
+import com.cecapi.app.core.data.MIGRATION_8_9
 import com.cecapi.app.core.util.PasswordHasher
 import com.cecapi.app.feature.modulo3_asistenteinteligente.ConsultaIaDao
 import com.cecapi.app.feature.modulo3_asistenteinteligente.ContextoConversacionDao
@@ -62,7 +64,10 @@ object DatabaseModule {
         @ApplicationContext context: Context,
         databaseProvider: Provider<AppDatabase>,
     ): AppDatabase = Room.databaseBuilder(context, AppDatabase::class.java, "cecapi.db")
-        .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
+        .addMigrations(
+            MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6,
+            MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9,
+        )
         .addCallback(object : androidx.room.RoomDatabase.Callback() {
             override fun onCreate(db: SupportSQLiteDatabase) {
                 super.onCreate(db)
@@ -77,6 +82,8 @@ object DatabaseModule {
             override fun onOpen(db: SupportSQLiteDatabase) {
                 super.onOpen(db)
                 ensureDemoUsers(db)
+                ensureDemoPendingUser(db)
+                ensureDemoRankingPoints(db)
                 resetAllPasswordsOnce(context, db)
             }
         })
@@ -150,6 +157,51 @@ object DatabaseModule {
                     arrayOf<Any?>(demo.educadorUsername, demo.nombreUsuario),
                 )
             }
+        }
+    }
+
+    /**
+     * One demo account left unvalidated on purpose, so Gestión always has something to validate
+     * when testing on a real phone (otherwise the "pendientes" list looks empty forever).
+     */
+    private fun ensureDemoPendingUser(db: SupportSQLiteDatabase) {
+        if (db.isReadOnly) return
+        val username = "LUPITA"
+        val exists = db.query(
+            "SELECT 1 FROM usuarios WHERE nombre_usuario = ? COLLATE NOCASE LIMIT 1",
+            arrayOf<Any?>(username),
+        ).use { it.moveToFirst() }
+        if (exists) return
+        db.insert(
+            "usuarios",
+            SQLiteDatabase.CONFLICT_IGNORE,
+            ContentValues().apply {
+                put("nombre_usuario", username)
+                put("contrasena_hash", PasswordHasher.hash("1234"))
+                put("nombre_completo", "Lupita (pendiente de validar)")
+                put("fecha_registro", System.currentTimeMillis())
+                put("rol", RolUsuario.USUARIO.codigo)
+                put("origen", "CECAPI")
+                put("validado", 0)
+            },
+        )
+    }
+
+    /**
+     * Ranking points for two demo accounts, so Clasificación shows real rows (individual and por
+     * institución) instead of the empty state on a fresh install.
+     */
+    private fun ensureDemoRankingPoints(db: SupportSQLiteDatabase) {
+        if (db.isReadOnly) return
+        val puntosPorUsuario = mapOf("JUAN" to (3 to 450), "MIRIAM" to (5 to 820))
+        puntosPorUsuario.forEach { (username, nivelYPuntos) ->
+            val (nivel, puntos) = nivelYPuntos
+            db.execSQL(
+                "INSERT INTO niveles_aprendizaje (usuario_id, nivel_actual, puntos_totales, fecha_actualizacion) " +
+                    "SELECT id, ?, ?, ? FROM usuarios WHERE nombre_usuario = ? COLLATE NOCASE " +
+                    "AND NOT EXISTS (SELECT 1 FROM niveles_aprendizaje WHERE usuario_id = usuarios.id)",
+                arrayOf<Any?>(nivel, puntos, System.currentTimeMillis(), username),
+            )
         }
     }
 

@@ -10,6 +10,7 @@ import com.cecapi.app.core.voice.FeedbackCues
 import com.cecapi.app.core.voice.VoiceEngine
 import com.cecapi.app.core.voice.VoiceOption
 import com.cecapi.app.core.voice.VoiceProfile
+import com.cecapi.app.core.voice.VoiceState
 import com.cecapi.app.core.voice.VoiceText
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -45,6 +46,10 @@ class PersonalizationViewModel @Inject constructor(
     val vibrationLevel: StateFlow<Int> = deviceSettings.vibrationLevel.stateIn(viewModelScope, SharingStarted.Eagerly, 2)
     val blackScreen: StateFlow<Boolean> = deviceSettings.blackScreen.stateIn(viewModelScope, SharingStarted.Eagerly, false)
     val minBrightness: StateFlow<Boolean> = deviceSettings.minBrightness.stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
+    val voiceState: StateFlow<VoiceState> = voiceEngine.state.stateIn(
+        viewModelScope, SharingStarted.WhileSubscribed(5_000), VoiceState.Idle,
+    )
 
     private val _back = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     val back: SharedFlow<Unit> = _back
@@ -118,6 +123,11 @@ class PersonalizationViewModel @Inject constructor(
     fun onCommandsRequested() {
         voiceEngine.speak(CommandCatalog.PERSONALIZATION, listenAfter = true)
     }
+
+    fun onMicTapped() = voiceEngine.startListening()
+
+    /** Two quick taps on the mic silence the assistant, for someone using touch instead of voice. */
+    fun onMicDoubleTap() = voiceEngine.mute()
 
     /** The phone's Spanish voices; empty until the speech engine has started, so the screen asks again. */
     fun voices(): List<VoiceOption> = voiceEngine.spanishVoices()

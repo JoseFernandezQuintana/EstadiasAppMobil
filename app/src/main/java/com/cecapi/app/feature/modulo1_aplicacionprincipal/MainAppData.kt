@@ -62,6 +62,12 @@ data class UsuarioEntity(
      */
     @ColumnInfo(name = "validado")
     val validado: Boolean = false,
+    /** En Clasificación, por default se muestra el nombre; esto deja mostrar el apodo en su lugar. */
+    @ColumnInfo(name = "usar_apodo_ranking")
+    val usarApodoRanking: Boolean = false,
+    /** Epoch millis. Nula en cuentas de antes de este campo. Es lo único que dice si la cuenta es de un menor. */
+    @ColumnInfo(name = "fecha_nacimiento")
+    val fechaNacimiento: Long? = null,
 )
 
 @Entity(
@@ -149,6 +155,9 @@ interface UsuarioDao {
 
     @Query("UPDATE usuarios SET validado = 1 WHERE id = :usuarioId")
     suspend fun validar(usuarioId: Long)
+
+    @Query("UPDATE usuarios SET usar_apodo_ranking = :usar WHERE id = :usuarioId")
+    suspend fun actualizarUsarApodoRanking(usuarioId: Long, usar: Boolean)
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insert(usuario: UsuarioEntity): Long

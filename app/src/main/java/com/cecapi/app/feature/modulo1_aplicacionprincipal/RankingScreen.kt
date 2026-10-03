@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -14,14 +15,18 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.BarChart
+import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.CalendarViewWeek
+import androidx.compose.material.icons.filled.EmojiEvents
+import androidx.compose.material.icons.filled.MilitaryTech
+import androidx.compose.material.icons.filled.Public
+import androidx.compose.material.icons.filled.School
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -33,15 +38,34 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.cecapi.app.core.theme.CecapiAccent
+import com.cecapi.app.core.theme.CecapiBackground
 import com.cecapi.app.core.theme.CecapiSurface
 import com.cecapi.app.core.theme.CecapiSurfaceElevated
 import com.cecapi.app.core.theme.CecapiTextMuted
+import com.cecapi.app.core.theme.Sections
+import com.cecapi.app.core.ui.BigBtn
+import com.cecapi.app.core.ui.BigBtnVariant
+import com.cecapi.app.core.ui.MicPad
 import com.cecapi.app.core.ui.ScreenTopBar
 import com.cecapi.app.core.ui.voiceHint
+import com.cecapi.app.core.voice.VoiceState
+
+private enum class RankingSub { MI_RANKING, TOP5 }
+
+/** Oro, morado, naranja para 1°-3°; azul y verde para 4°-5° — un lugar se nota antes de leer el número. */
+private data class Podio(val color: Color, val fondo: Color, val icono: ImageVector?)
+private val PODIO = mapOf(
+    1 to Podio(Color(0xFFFFD700), Color(0xFF2E2800), Icons.Filled.EmojiEvents),
+    2 to Podio(Color(0xFFC084FC), Color(0xFF271A3A), Icons.Filled.Star),
+    3 to Podio(Color(0xFFFB923C), Color(0xFF2A1800), Icons.Filled.MilitaryTech),
+    4 to Podio(CecapiAccent, Color(0xFF0B1E2E), null),
+    5 to Podio(Color(0xFF34D399), Color(0xFF082218), null),
+)
 
 @Composable
 fun RankingScreen(
@@ -49,136 +73,237 @@ fun RankingScreen(
     viewModel: RankingViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsState()
+    val voiceState by viewModel.voiceState.collectAsState()
+    val listening = voiceState is VoiceState.Listening
+    var sub by remember { mutableStateOf<RankingSub?>(null) }
     LaunchedEffect(Unit) { viewModel.back.collect { onBack() } }
-    var apodoTexto by remember(state.miApodo) { mutableStateOf(state.miApodo) }
 
+    val miPosicion = state.individual.indexOfFirst { it.usuarioId == state.miId }
+
+    Box(modifier = Modifier.fillMaxSize()) {
     Column(
-        modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 16.dp),
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 16.dp, vertical = 16.dp)
+            .padding(bottom = 230.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        ScreenTopBar(
-            eyebrow = "ACTIVIDADES",
-            title = "Clasificación",
-            onBack = onBack,
-            onCommands = viewModel::onCommandsRequested,
-        )
+        when (sub) {
+            null -> {
+                ScreenTopBar(eyebrow = "ACTIVIDADES", title = "Clasificación", onBack = onBack, onCommands = viewModel::onCommandsRequested)
 
-        // Apodo: para no mostrar el nombre real en una lista pública, sobre todo habiendo menores.
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(16.dp))
-                .background(CecapiSurface)
-                .padding(16.dp),
-        ) {
-            Text("TU APODO EN LA LISTA", style = MaterialTheme.typography.labelLarge, color = CecapiTextMuted)
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                OutlinedTextField(
-                    value = apodoTexto,
-                    onValueChange = { apodoTexto = it },
-                    modifier = Modifier.weight(1f).voiceHint("Tu apodo. También puedes decir: mi apodo."),
-                    placeholder = { Text("Un apodo, no tu nombre real") },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                    keyboardActions = KeyboardActions(onDone = { viewModel.onApodoElegido(apodoTexto) }),
-                    colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = CecapiAccent, unfocusedBorderColor = CecapiTextMuted),
-                )
-                Button(
-                    onClick = { viewModel.onApodoElegido(apodoTexto) },
-                    colors = ButtonDefaults.buttonColors(containerColor = CecapiAccent),
-                ) { Text("Guardar", color = MaterialTheme.colorScheme.onPrimary) }
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+                    BigBtn(
+                        icon = Icons.Filled.BarChart,
+                        label = "Ver mi ranking",
+                        section = Sections.Ranking,
+                        variant = BigBtnVariant.Accent,
+                        half = true,
+                        enabled = miPosicion >= 0,
+                        onClick = { sub = RankingSub.MI_RANKING },
+                        modifier = Modifier.weight(1f),
+                    )
+                    BigBtn(
+                        icon = Icons.Filled.EmojiEvents,
+                        label = "Top 5",
+                        section = Sections.Ranking,
+                        half = true,
+                        enabled = state.individual.isNotEmpty(),
+                        onClick = { sub = RankingSub.TOP5 },
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+
+                Text("TABLA INDIVIDUAL", style = MaterialTheme.typography.labelLarge, color = CecapiTextMuted)
+
+                if (state.tieneInstitucion) {
+                    // "Competir con alumnos de su institución y de otras": las dos vistas, una u otra, no mezcladas.
+                    // Las instituciones en sí no compiten entre ellas — esto solo filtra a qué personas se ve.
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        BigBtn(
+                            icon = Icons.Filled.School,
+                            label = "Mi institución",
+                            variant = if (state.alcance == AlcanceRanking.MI_INSTITUCION) BigBtnVariant.Accent else BigBtnVariant.Neutral,
+                            half = true,
+                            onClick = { viewModel.cambiarAlcance(AlcanceRanking.MI_INSTITUCION) },
+                            modifier = Modifier.weight(1f),
+                        )
+                        BigBtn(
+                            icon = Icons.Filled.Public,
+                            label = "Todas",
+                            variant = if (state.alcance == AlcanceRanking.TODAS) BigBtnVariant.Accent else BigBtnVariant.Neutral,
+                            half = true,
+                            onClick = { viewModel.cambiarAlcance(AlcanceRanking.TODAS) },
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                }
+
+                // Espacio reservado para competencias por tiempo (eventos/dinámicas de un educador o
+                // globales de la institución, con puntos por 1°, 2° o 3° lugar) — todavía sin datos
+                // reales que mostrar, así que quedan bloqueadas en vez de simular algo que no existe.
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    BigBtn(
+                        icon = Icons.Filled.CalendarViewWeek,
+                        label = "Semana",
+                        variant = BigBtnVariant.Locked,
+                        half = true,
+                        onClick = {},
+                        modifier = Modifier.weight(1f),
+                    )
+                    BigBtn(
+                        icon = Icons.Filled.CalendarMonth,
+                        label = "Mes",
+                        variant = BigBtnVariant.Locked,
+                        half = true,
+                        onClick = {},
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+
+                if (state.individual.isEmpty()) {
+                    val mensaje = if (state.alcance == AlcanceRanking.MI_INSTITUCION) {
+                        "Todavía nadie de tu institución tiene puntos aquí. Practica en Actividades, en los sonidos, para aparecer."
+                    } else {
+                        "Todavía nadie tiene puntos aquí. Practica en Actividades, en los sonidos, para aparecer."
+                    }
+                    Text(mensaje, style = MaterialTheme.typography.bodyMedium, color = CecapiTextMuted)
+                } else {
+                    state.individual.forEachIndexed { index, fila ->
+                        RankingFilaRow(
+                            posicion = index + 1,
+                            nombre = fila.nombreMostrado,
+                            detalle = "Nivel ${fila.nivelActual}",
+                            puntos = fila.puntosTotales,
+                            destacado = fila.usuarioId == state.miId,
+                        )
+                    }
+                }
             }
-        }
 
-        Text("TABLA INDIVIDUAL", style = MaterialTheme.typography.labelLarge, color = CecapiTextMuted)
-
-        if (state.tieneInstitucion) {
-            // "Competir con alumnos de su institución y de otras": las dos vistas, una u otra, no mezcladas.
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                AlcanceChip(
-                    label = "Mi institución",
-                    seleccionado = state.alcance == AlcanceRanking.MI_INSTITUCION,
-                    onClick = { viewModel.cambiarAlcance(AlcanceRanking.MI_INSTITUCION) },
-                    modifier = Modifier.weight(1f),
-                )
-                AlcanceChip(
-                    label = "Todas",
-                    seleccionado = state.alcance == AlcanceRanking.TODAS,
-                    onClick = { viewModel.cambiarAlcance(AlcanceRanking.TODAS) },
-                    modifier = Modifier.weight(1f),
-                )
+            RankingSub.MI_RANKING -> if (miPosicion >= 0) {
+                ScreenTopBar(eyebrow = "CLASIFICACIÓN", title = "Mi posición", onBack = { sub = null }, onCommands = viewModel::onCommandsRequested)
+                val fila = state.individual[miPosicion]
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(Sections.Ranking.bg)
+                        .border(2.dp, Sections.Ranking.color, RoundedCornerShape(20.dp))
+                        .padding(vertical = 20.dp, horizontal = 18.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Text("TU POSICIÓN", style = MaterialTheme.typography.labelLarge, color = Sections.Ranking.color)
+                    Text("#${miPosicion + 1}", style = MaterialTheme.typography.displayLarge, color = Sections.Ranking.color)
+                    Text("${fila.puntosTotales} puntos", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onBackground)
+                    Text(
+                        "Nivel ${fila.nivelActual}" + if (fila.origen.isNotBlank()) " · ${fila.origen}" else "",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = CecapiTextMuted,
+                    )
+                }
+                Text("POSICIONES CERCANAS", style = MaterialTheme.typography.labelLarge, color = CecapiTextMuted, modifier = Modifier.padding(top = 8.dp))
+                val desde = (miPosicion - 2).coerceAtLeast(0)
+                val hasta = (miPosicion + 2).coerceAtMost(state.individual.lastIndex)
+                for (i in desde..hasta) {
+                    val cercana = state.individual[i]
+                    RankingFilaRow(
+                        posicion = i + 1,
+                        nombre = cercana.nombreMostrado,
+                        detalle = "Nivel ${cercana.nivelActual}",
+                        puntos = cercana.puntosTotales,
+                        destacado = cercana.usuarioId == state.miId,
+                    )
+                }
             }
-        }
 
-        if (state.individual.isEmpty()) {
-            val mensaje = if (state.alcance == AlcanceRanking.MI_INSTITUCION) {
-                "Todavía nadie de tu institución tiene puntos aquí. Practica en Actividades, en los sonidos, para aparecer."
-            } else {
-                "Todavía nadie tiene puntos aquí. Practica en Actividades, en los sonidos, para aparecer."
-            }
-            Text(mensaje, style = MaterialTheme.typography.bodyMedium, color = CecapiTextMuted)
-        } else {
-            state.individual.forEachIndexed { index, fila ->
-                RankingRow(
-                    posicion = index + 1,
-                    nombre = fila.nombreMostrado,
-                    detalle = "Nivel ${fila.nivelActual}",
-                    puntos = fila.puntosTotales,
-                    destacado = fila.usuarioId == state.miId,
-                )
-            }
-        }
-
-        Text(
-            "INSTITUCIONES",
-            style = MaterialTheme.typography.labelLarge,
-            color = CecapiTextMuted,
-            modifier = Modifier.padding(top = 8.dp),
-        )
-        if (state.instituciones.isEmpty()) {
-            Text(
-                "Todavía ninguna institución tiene puntos.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = CecapiTextMuted,
-            )
-        } else {
-            state.instituciones.forEachIndexed { index, institucion ->
-                RankingRow(
-                    posicion = index + 1,
-                    nombre = institucion.origen,
-                    detalle = "${institucion.miembros} " + if (institucion.miembros == 1) "persona" else "personas",
-                    puntos = institucion.puntosTotales,
-                    destacado = false,
-                )
+            RankingSub.TOP5 -> {
+                ScreenTopBar(eyebrow = "LOS MEJORES", title = "Top 5", onBack = { sub = null }, onCommands = viewModel::onCommandsRequested)
+                state.individual.take(5).forEachIndexed { index, fila ->
+                    RankingFilaRow(
+                        posicion = index + 1,
+                        nombre = fila.nombreMostrado,
+                        detalle = "Nivel ${fila.nivelActual}",
+                        puntos = fila.puntosTotales,
+                        destacado = fila.usuarioId == state.miId,
+                    )
+                }
             }
         }
     }
+
+        MicPad(
+            listening = listening,
+            onDoubleTap = viewModel::onMicDoubleTap,
+            hint = if (listening) "Escuchando…" else "Di mi lugar, o toca aquí",
+            onClick = viewModel::onMicTapped,
+            modifier = Modifier.align(Alignment.BottomCenter),
+        )
+    }
 }
 
+/** Una fila de la tabla: 1°-3° como podio grande con medalla, 4°-5° destacadas más chico, el resto normal. */
 @Composable
-private fun AlcanceChip(label: String, seleccionado: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    val shape = RoundedCornerShape(50)
-    Row(
-        modifier = modifier
-            .heightIn(min = 44.dp)
-            .clip(shape)
-            .background(if (seleccionado) CecapiAccent.copy(alpha = 0.2f) else CecapiSurfaceElevated)
-            .border(if (seleccionado) 2.dp else 1.dp, if (seleccionado) CecapiAccent else CecapiTextMuted.copy(alpha = 0.4f), shape)
-            .clickable(onClick = onClick)
-            .voiceHint("$label. Toca para comparar aquí."),
-        horizontalArrangement = Arrangement.Center,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            if (seleccionado) "$label  ✓" else label,
-            style = MaterialTheme.typography.bodyMedium,
-            color = if (seleccionado) CecapiAccent else MaterialTheme.colorScheme.onBackground,
-            modifier = Modifier.padding(vertical = 10.dp),
-        )
+private fun RankingFilaRow(posicion: Int, nombre: String, detalle: String, puntos: Int, destacado: Boolean) {
+    val podio = PODIO[posicion]
+    if (podio == null) {
+        RankingRow(posicion, nombre, detalle, puntos, destacado)
+        return
+    }
+    val esTop3 = posicion <= 3
+    val shape = RoundedCornerShape(20.dp)
+    if (esTop3) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(shape)
+                .background(podio.fondo)
+                .border(if (posicion == 1) 3.dp else 2.dp, podio.color, shape)
+                .voiceHint("Lugar $posicion. $nombre, $detalle, $puntos puntos.")
+                .padding(if (posicion == 1) 22.dp else 16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(if (posicion == 1) 64.dp else 52.dp)
+                    .clip(CircleShape)
+                    .background(CecapiBackground)
+                    .border(if (posicion == 1) 3.dp else 2.dp, podio.color, CircleShape),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(podio.icono!!, contentDescription = null, tint = podio.color, modifier = Modifier.size(if (posicion == 1) 34.dp else 28.dp))
+            }
+            Text(nombre, style = if (posicion == 1) MaterialTheme.typography.headlineSmall else MaterialTheme.typography.titleLarge, color = podio.color)
+            Text(detalle, style = MaterialTheme.typography.bodyMedium, color = CecapiTextMuted)
+            Text("$puntos pts", style = if (posicion == 1) MaterialTheme.typography.headlineSmall else MaterialTheme.typography.titleLarge, color = podio.color)
+        }
+    } else {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 56.dp)
+                .clip(RoundedCornerShape(16.dp))
+                .background(podio.fondo)
+                .border(1.dp, podio.color, RoundedCornerShape(16.dp))
+                .voiceHint("Lugar $posicion. $nombre, $detalle, $puntos puntos.")
+                .padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Row(
+                modifier = Modifier.size(32.dp).clip(CircleShape).background(podio.color.copy(alpha = 0.18f)),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("$posicion", style = MaterialTheme.typography.labelLarge, color = podio.color)
+            }
+            Column(modifier = Modifier.weight(1f).padding(start = 12.dp)) {
+                Text(nombre, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onBackground)
+                Text(detalle, style = MaterialTheme.typography.bodySmall, color = CecapiTextMuted)
+            }
+            Text("$puntos pts", style = MaterialTheme.typography.titleMedium, color = podio.color)
+        }
     }
 }
 

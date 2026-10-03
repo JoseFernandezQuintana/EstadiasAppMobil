@@ -15,13 +15,12 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.MicOff
 import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material.icons.filled.Replay
 import androidx.compose.runtime.Composable
@@ -47,9 +46,9 @@ import com.cecapi.app.core.ui.CaptureButton
 import com.cecapi.app.core.ui.FramingGuide
 import com.cecapi.app.core.ui.SuggestionChip
 import com.cecapi.app.core.ui.TopAction
-import com.cecapi.app.core.ui.VoiceCaptionBubble
 import com.cecapi.app.core.ui.capturePhoto
 import com.cecapi.app.core.ui.copyPickedImage
+import com.cecapi.app.core.voice.VoiceState
 import kotlinx.coroutines.launch
 
 @Composable
@@ -60,6 +59,7 @@ fun EnvironmentScreen(
 ) {
     val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsState()
+    val voiceState by viewModel.voiceState.collectAsState()
 
     var hasCameraPermission by remember {
         mutableStateOf(
@@ -115,13 +115,6 @@ fun EnvironmentScreen(
         }
     }
 
-    val statusText = when {
-        uiState.errorMessage != null -> uiState.errorMessage
-        uiState.isProcessing -> "Analizando el entorno."
-        uiState.descripcion != null -> uiState.descripcion
-        else -> "Apunta la cámara al frente y di qué hay enfrente."
-    }
-
     Box(modifier = Modifier.fillMaxSize()) {
         // Once there is a photo, it takes over this area — its own place to look at, separate from the
         // live feed — instead of a live camera nobody is watching anymore while the description is read.
@@ -158,12 +151,6 @@ fun EnvironmentScreen(
 
             Spacer(modifier = Modifier.weight(1f))
 
-            // A long description scrolls inside its own box so the shutter button never leaves the screen.
-            VoiceCaptionBubble(
-                text = statusText ?: "",
-                modifier = Modifier.heightIn(max = 180.dp).verticalScroll(rememberScrollState()),
-            )
-
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
                 SuggestionChip(label = "qué hay enfrente", onClick = viewModel::pedirCaptura)
             }
@@ -172,7 +159,7 @@ fun EnvironmentScreen(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(24.dp))
+                        .clip(RoundedCornerShape(20.dp))
                         .background(CecapiBackground.copy(alpha = 0.82f))
                         .padding(vertical = 8.dp),
                     horizontalArrangement = Arrangement.Center,
@@ -205,8 +192,15 @@ fun EnvironmentScreen(
                         "También puedes decir: qué hay enfrente.",
                     onClick = viewModel::pedirCaptura,
                 )
-                // Same width as the button on the left, so the shutter stays centered.
-                Spacer(modifier = Modifier.width(76.dp))
+                // Mismo ancho que "Mis fotos" para que el obturador quede centrado, pero ahora es
+                // un micrófono real en vez de un espacio vacío.
+                val listening = voiceState is VoiceState.Listening
+                TopAction(
+                    icon = if (listening) Icons.Filled.MicOff else Icons.Filled.Mic,
+                    label = if (listening) "Escuchando" else "Hablar",
+                    help = "Micrófono. Tócalo para hablar — di qué hay enfrente, o lo que necesites.",
+                    onClick = viewModel::onMicTapped,
+                )
             }
         }
     }

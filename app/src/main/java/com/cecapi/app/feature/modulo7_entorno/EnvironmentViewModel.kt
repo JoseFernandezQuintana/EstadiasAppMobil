@@ -114,6 +114,7 @@ class EnvironmentViewModel @Inject constructor(
     /** Also what the on-screen button and the "qué hay enfrente" chip call. */
     fun pedirCaptura() {
         if (_uiState.value.isProcessing || !hayEspacio()) return
+        voiceEngine.speak("Tomando foto.")
         _captureRequests.tryEmit(Unit)
     }
 
@@ -129,6 +130,11 @@ class EnvironmentViewModel @Inject constructor(
     fun onCommandsRequested() {
         voiceEngine.speak(CommandCatalog.ENVIRONMENT, listenAfter = true)
     }
+
+    fun onMicTapped() = voiceEngine.startListening()
+
+    /** Two quick taps on the mic silence the assistant, for someone using touch instead of voice. */
+    fun onMicDoubleTap() = voiceEngine.mute()
 
     fun onCameraPermissionDenied() {
         voiceEngine.speak("Sin el permiso de la cámara no puedo describir lo que hay enfrente. Actívalo en los ajustes de la aplicación.")

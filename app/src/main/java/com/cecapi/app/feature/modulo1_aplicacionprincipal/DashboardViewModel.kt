@@ -417,6 +417,13 @@ class DashboardViewModel @Inject constructor(
         _navEvents.tryEmit(CecapiDestinations.RANKING)
     }
 
+    /** Open to anyone signed in, every role. */
+    fun onEditarCuentaSelected() {
+        cues.play(FeedbackCues.Cue.NAVIGATE)
+        voiceEngine.speak("Abriendo editar mi cuenta.")
+        _navEvents.tryEmit(CecapiDestinations.EDIT_ACCOUNT)
+    }
+
     /** A card of the main menu was tapped (or named out loud). */
     fun onMenuItemSelected(item: MenuItem) = onMenuKey(item.key)
 

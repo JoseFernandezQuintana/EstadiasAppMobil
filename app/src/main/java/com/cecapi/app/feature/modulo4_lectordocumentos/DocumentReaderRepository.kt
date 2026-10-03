@@ -42,9 +42,9 @@ class DocumentReaderRepository @Inject constructor(
             if (averageLuminance(grises) < BRIGHTNESS_THRESHOLD) {
                 return reject(rutaImagen, OcrOutcome.PocaLuz)
             }
-            if (laplacianVariance(grises) < BLUR_VARIANCE_THRESHOLD) {
-                return reject(rutaImagen, OcrOutcome.Borrosa)
-            }
+            // Borrosa ya no rechaza la foto: quien no ve no puede saber de antemano si quedó movida,
+            // así que se intenta leer igual y solo se avisa si algo sí se reconoció.
+            val borrosa = laplacianVariance(grises) < BLUR_VARIANCE_THRESHOLD
 
             val inputImage = InputImage.fromFilePath(context, imageUri)
             val visionText = recognizer.process(inputImage).await()
@@ -61,7 +61,7 @@ class DocumentReaderRepository @Inject constructor(
                 )
                 nuevoId
             }
-            OcrOutcome.Exito(documentoId, parrafos)
+            OcrOutcome.Exito(documentoId, parrafos, borrosa = borrosa)
         } catch (e: Exception) {
             reject(rutaImagen, OcrOutcome.Error(e))
         }

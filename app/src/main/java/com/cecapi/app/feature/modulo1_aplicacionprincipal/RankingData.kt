@@ -9,13 +9,20 @@ data class RankingFila(
     val usuarioId: Long,
     val nombreCompleto: String,
     val apodo: String?,
+    val usarApodoRanking: Boolean,
     val origen: String,
     val rol: String,
     val puntosTotales: Int,
     val nivelActual: Int,
 ) {
-    /** The real name is never shown here — an apodo if they chose one, else just the first name. */
-    val nombreMostrado: String get() = apodo?.takeIf { it.isNotBlank() } ?: nombreCompleto.substringBefore(" ")
+    /** The real full name is never shown here. By default, just the first name; the person can
+     * choose in Editar mi cuenta to show their apodo instead. */
+    val nombreMostrado: String
+        get() = if (usarApodoRanking) {
+            apodo?.takeIf { it.isNotBlank() } ?: nombreCompleto.substringBefore(" ")
+        } else {
+            nombreCompleto.substringBefore(" ")
+        }
 }
 
 /** One row of the institution ranking: an institution's combined points from everyone in it. */
@@ -33,7 +40,8 @@ data class RankingInstitucion(
 @Dao
 interface RankingDao {
     @Query(
-        "SELECT u.id AS usuarioId, u.nombre_completo AS nombreCompleto, u.apodo AS apodo, u.origen AS origen, " +
+        "SELECT u.id AS usuarioId, u.nombre_completo AS nombreCompleto, u.apodo AS apodo, " +
+            "u.usar_apodo_ranking AS usarApodoRanking, u.origen AS origen, " +
             "u.rol AS rol, n.puntos_totales AS puntosTotales, n.nivel_actual AS nivelActual " +
             "FROM niveles_aprendizaje n JOIN usuarios u ON u.id = n.usuario_id " +
             "WHERE n.puntos_totales > 0 " +
@@ -44,7 +52,8 @@ interface RankingDao {
     /** Solo las personas de [origen]: para que un alumno se compare con sus compañeros de institución,
      * no solo con todo el mundo en la tabla global. */
     @Query(
-        "SELECT u.id AS usuarioId, u.nombre_completo AS nombreCompleto, u.apodo AS apodo, u.origen AS origen, " +
+        "SELECT u.id AS usuarioId, u.nombre_completo AS nombreCompleto, u.apodo AS apodo, " +
+            "u.usar_apodo_ranking AS usarApodoRanking, u.origen AS origen, " +
             "u.rol AS rol, n.puntos_totales AS puntosTotales, n.nivel_actual AS nivelActual " +
             "FROM niveles_aprendizaje n JOIN usuarios u ON u.id = n.usuario_id " +
             "WHERE n.puntos_totales > 0 AND u.origen = :origen COLLATE NOCASE " +

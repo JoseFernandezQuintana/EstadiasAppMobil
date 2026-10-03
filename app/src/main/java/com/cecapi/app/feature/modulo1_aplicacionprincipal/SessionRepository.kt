@@ -76,7 +76,13 @@ class SessionRepository @Inject constructor(
      * whoever is above them in Gestión (administrador > directivo > educador > alumno, or
      * administrador > usuario) to confirm later. Nothing here blocks on that.
      */
-    suspend fun register(nombreUsuario: String, contrasena: String, nombreCompleto: String): RegisterResult {
+    suspend fun register(
+        nombreUsuario: String,
+        contrasena: String,
+        nombreCompleto: String,
+        origen: String = "",
+        fechaNacimiento: Long? = null,
+    ): RegisterResult {
         val nombreNormalizado = nombreUsuario.trim().uppercase()
         // The table has no unique index on the username, so the duplicate check has to be explicit.
         if (usuarioDao.findByUsername(nombreNormalizado) != null) return RegisterResult.UsernameTaken
@@ -84,6 +90,8 @@ class SessionRepository @Inject constructor(
             nombreUsuario = nombreNormalizado,
             contrasenaHash = PasswordHasher.hash(contrasena.trim()),
             nombreCompleto = nombreCompleto.trim(),
+            origen = origen.trim(),
+            fechaNacimiento = fechaNacimiento,
         )
         val nuevoId = usuarioDao.insert(usuario)
         if (nuevoId <= 0) return RegisterResult.UsernameTaken
@@ -120,7 +128,13 @@ class SessionRepository @Inject constructor(
      * only ever changes a role, not these). Confirms with the CURRENT password first, same as deleting
      * the account, so a stray "cambia mi nombre" from someone else in the room cannot silently do it.
      */
-    suspend fun actualizarPerfil(nombreCompleto: String, contrasenaActual: String, nuevaContrasena: String?): EditarPerfilResult {
+    suspend fun actualizarPerfil(
+        nombreCompleto: String,
+        contrasenaActual: String,
+        nuevaContrasena: String?,
+        apodo: String? = null,
+        usarApodoRanking: Boolean = false,
+    ): EditarPerfilResult {
         val user = _currentUser.value ?: return EditarPerfilResult.SinSesion
         if (PasswordHasher.hash(contrasenaActual.trim()) != user.contrasenaHash) {
             return EditarPerfilResult.ContrasenaActualIncorrecta
@@ -132,7 +146,15 @@ class SessionRepository @Inject constructor(
             nuevoHash = PasswordHasher.hash(nuevaContrasena.trim())
             usuarioDao.actualizarContrasena(user.id, nuevoHash)
         }
-        _currentUser.value = user.copy(nombreCompleto = nombreLimpio, contrasenaHash = nuevoHash)
+        val apodoLimpio = apodo?.trim()?.ifBlank { null }
+        usuarioDao.actualizarApodo(user.id, apodoLimpio)
+        usuarioDao.actualizarUsarApodoRanking(user.id, usarApodoRanking)
+        _currentUser.value = user.copy(
+            nombreCompleto = nombreLimpio,
+            contrasenaHash = nuevoHash,
+            apodo = apodoLimpio,
+            usarApodoRanking = usarApodoRanking,
+        )
         return EditarPerfilResult.Exito
     }
 

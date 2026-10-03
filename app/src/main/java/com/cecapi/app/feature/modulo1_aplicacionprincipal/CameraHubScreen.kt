@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -25,6 +24,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -40,17 +41,22 @@ import com.cecapi.app.core.navigation.CecapiDestinations
 import com.cecapi.app.core.theme.CecapiEyebrowStyle
 import com.cecapi.app.core.theme.CecapiSurface
 import com.cecapi.app.core.theme.CecapiTextMuted
+import com.cecapi.app.core.theme.Sections
+import com.cecapi.app.core.ui.MicPad
 import com.cecapi.app.core.ui.ScreenTopBar
-import com.cecapi.app.core.ui.SuggestionChip
 import com.cecapi.app.core.ui.voiceHint
 import com.cecapi.app.core.voice.DeviceSettings
 import com.cecapi.app.core.voice.FeedbackCues
 import com.cecapi.app.core.voice.VoiceEngine
+import com.cecapi.app.core.voice.VoiceState
 import com.cecapi.app.core.voice.VoiceText
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -71,6 +77,10 @@ class CameraHubViewModel @Inject constructor(
 
     private val _back = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     val back: SharedFlow<Unit> = _back
+
+    val voiceState: StateFlow<VoiceState> = voiceEngine.state.stateIn(
+        viewModelScope, SharingStarted.WhileSubscribed(5_000), VoiceState.Idle,
+    )
 
     // Stays alive under the text reader or the environment screen; ignore speech meant for them.
     private var screenActive = false
@@ -111,6 +121,11 @@ class CameraHubViewModel @Inject constructor(
         voiceEngine.speak(CommandCatalog.CAMERA, listenAfter = true)
     }
 
+    fun onMicTapped() = voiceEngine.startListening()
+
+    /** Two quick taps on the mic silence the assistant, for someone using touch instead of voice. */
+    fun onMicDoubleTap() = voiceEngine.mute()
+
     private fun open(route: String, speech: String) {
         cameFromMode = true
         cues.play(FeedbackCues.Cue.NAVIGATE)
@@ -148,12 +163,16 @@ fun CameraHubScreen(
         viewModel.setScreenActive(true)
         onDispose { viewModel.setScreenActive(false) }
     }
+    val voiceState by viewModel.voiceState.collectAsState()
+    val listening = voiceState is VoiceState.Listening
 
+    Box(modifier = Modifier.fillMaxSize()) {
     Column(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp, vertical = 16.dp),
+            .padding(horizontal = 16.dp, vertical = 16.dp)
+            .padding(bottom = 230.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         ScreenTopBar(
@@ -173,7 +192,7 @@ fun CameraHubScreen(
             title = "Leer texto",
             subtitle = "Lee en voz alta documentos, carteles y etiquetas",
             example = "Di: leer texto",
-            accent = Color(0xFF4ADE80),
+            accent = Sections.Camera.color,
             help = "Leer texto. Apunta la cámara a un papel, un cartel o una etiqueta y te lo leo en voz alta. " +
                 "Toca dos veces para abrir.",
             onClick = viewModel::openTextReader,
@@ -183,16 +202,19 @@ fun CameraHubScreen(
             title = "Qué hay enfrente",
             subtitle = "Te cuenta qué objetos y cosas ve la cámara",
             example = "Di: qué hay enfrente",
-            accent = Color(0xFFFB923C),
+            accent = Sections.Camera.color,
             help = "Qué hay enfrente. Apunta la cámara y te digo qué objetos veo. Toca dos veces para abrir.",
             onClick = viewModel::openEnvironment,
         )
-        Text("PUEDES DECIR", style = CecapiEyebrowStyle, color = CecapiTextMuted, modifier = Modifier.padding(horizontal = 8.dp))
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(horizontal = 8.dp)) {
-            SuggestionChip(label = "leer texto", onClick = viewModel::openTextReader)
-            SuggestionChip(label = "qué hay enfrente", onClick = viewModel::openEnvironment)
-            SuggestionChip(label = "lista de comandos", onClick = viewModel::onCommandsRequested)
-        }
+    }
+
+        MicPad(
+            listening = listening,
+            onDoubleTap = viewModel::onMicDoubleTap,
+            hint = if (listening) "Escuchando…" else "Di leer texto o qué hay enfrente",
+            onClick = viewModel::onMicTapped,
+            modifier = Modifier.align(Alignment.BottomCenter),
+        )
     }
 }
 
@@ -206,7 +228,7 @@ private fun ModeCard(
     help: String,
     onClick: () -> Unit,
 ) {
-    val shape = RoundedCornerShape(28.dp)
+    val shape = RoundedCornerShape(20.dp)
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -221,12 +243,13 @@ private fun ModeCard(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(16.dp),
     ) {
+        val iconShape = RoundedCornerShape(20.dp)
         Box(
             modifier = Modifier
                 .size(72.dp)
-                .clip(CircleShape)
+                .clip(iconShape)
                 .background(accent.copy(alpha = 0.18f))
-                .border(2.dp, accent, CircleShape),
+                .border(2.dp, accent, iconShape),
             contentAlignment = Alignment.Center,
         ) {
             Icon(icon, contentDescription = null, tint = accent, modifier = Modifier.size(40.dp))

@@ -63,4 +63,7 @@ class VoiceAssistantViewModel @Inject constructor(
     fun onMicTapped() {
         voiceEngine.startListening()
     }
+
+    /** Two quick taps on the mic silence the assistant, for someone using touch instead of voice. */
+    fun onMicDoubleTap() = voiceEngine.mute()
 }

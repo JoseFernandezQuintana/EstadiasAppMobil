@@ -4,8 +4,13 @@ import android.Manifest
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -16,21 +21,27 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Badge
+import androidx.compose.material.icons.filled.Cake
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.School
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -38,6 +49,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
@@ -53,11 +65,16 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.cecapi.app.core.theme.CecapiAccent
 import com.cecapi.app.core.theme.CecapiError
 import com.cecapi.app.core.theme.CecapiEyebrowStyle
+import com.cecapi.app.core.theme.CecapiSurfaceElevated
 import com.cecapi.app.core.theme.CecapiTextMuted
-import com.cecapi.app.core.ui.VoiceMicButton
+import com.cecapi.app.core.ui.BigBtn
+import com.cecapi.app.core.ui.BigBtnVariant
+import com.cecapi.app.core.ui.MicPad
+import com.cecapi.app.core.ui.ScreenTopBar
 import com.cecapi.app.core.ui.voiceHint
 import com.cecapi.app.core.voice.VoiceState
 
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 fun RegisterScreen(
     onRegisterSuccess: () -> Unit,
@@ -80,44 +97,24 @@ fun RegisterScreen(
         viewModel.back.collect { onBack() }
     }
 
+    val listening = voiceState is VoiceState.Listening
+
+    // Mismo micrófono grande y fijo que en el resto de la app — un solo control, siempre en el
+    // mismo lugar, para alguien que no ve dónde está un botón chico.
+    Box(modifier = Modifier.fillMaxSize()) {
     Column(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 24.dp, vertical = 32.dp),
+            .padding(horizontal = 24.dp, vertical = 16.dp)
+            .padding(bottom = 250.dp),
     ) {
-        // Visible way back for someone navigating by touch, not only by voice ("atrás").
-        val backHelp = "Volver. Regresa a la pantalla anterior."
-        IconButton(
-            onClick = onBack,
-            modifier = Modifier
-                .size(48.dp)
-                .semantics { contentDescription = backHelp }
-                .voiceHint(backHelp),
-        ) {
-            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null, tint = CecapiAccent)
-        }
-
-        Text("CREAR CUENTA", style = CecapiEyebrowStyle, color = CecapiTextMuted)
-        Text(
-            "Crea tu cuenta",
-            style = MaterialTheme.typography.headlineMedium,
-            color = MaterialTheme.colorScheme.onBackground,
+        ScreenTopBar(
+            eyebrow = "CREAR CUENTA",
+            title = "Nueva cuenta",
+            onBack = onBack,
+            onCommands = { viewModel.onMicTapped() },
         )
-
-        // What the voice says is not repeated on screen; the assistant guides the steps by voice.
-        Box(modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp)) {
-            VoiceMicButton(
-                isListening = voiceState is VoiceState.Listening,
-                onDoubleTap = viewModel::onMicDoubleTap,
-                onClick = {
-                    val granted = ContextCompat.checkSelfPermission(
-                        context, Manifest.permission.RECORD_AUDIO,
-                    ) == PackageManager.PERMISSION_GRANTED
-                    if (granted) viewModel.onMicTapped() else permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-                },
-            )
-        }
 
         Text(
             text = "NOMBRE COMPLETO",
@@ -130,15 +127,17 @@ fun RegisterScreen(
             onValueChange = viewModel::onNombreCompletoChange,
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(min = 64.dp)
+                .heightIn(min = 72.dp)
                 .voiceHint(
                     help = "Campo de nombre completo. Aquí va tu nombre y apellido, como quieres que te salude.",
                     focusLabel = "Campo de nombre completo. Escribe tu nombre y apellido.",
                 ),
-            placeholder = { Text("Tu nombre y apellido") },
-            leadingIcon = { Icon(Icons.Filled.Badge, contentDescription = null) },
+            textStyle = MaterialTheme.typography.titleLarge,
+            placeholder = { Text("Tu nombre y apellido", style = MaterialTheme.typography.titleMedium) },
+            leadingIcon = { Icon(Icons.Filled.Badge, contentDescription = null, modifier = Modifier.size(28.dp)) },
             singleLine = true,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
+            shape = RoundedCornerShape(16.dp),
             colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = CecapiAccent),
         )
 
@@ -146,27 +145,29 @@ fun RegisterScreen(
             text = "USUARIO",
             style = CecapiEyebrowStyle,
             color = CecapiTextMuted,
-            modifier = Modifier.padding(top = 20.dp, bottom = 8.dp),
+            modifier = Modifier.padding(top = 24.dp, bottom = 8.dp),
         )
         OutlinedTextField(
             value = uiState.nombreUsuario,
             onValueChange = viewModel::onNombreUsuarioChange,
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(min = 64.dp)
+                .heightIn(min = 72.dp)
                 .voiceHint(
                     help = "Campo de usuario. Elige el nombre corto con el que vas a entrar. " +
                         "Se escribe en mayúsculas automáticamente.",
                     focusLabel = "Campo de usuario. Elige un nombre corto para entrar.",
                 ),
-            placeholder = { Text("Elige un nombre de usuario") },
-            leadingIcon = { Icon(Icons.Filled.Person, contentDescription = null) },
+            textStyle = MaterialTheme.typography.titleLarge,
+            placeholder = { Text("Elige un nombre de usuario", style = MaterialTheme.typography.titleMedium) },
+            leadingIcon = { Icon(Icons.Filled.Person, contentDescription = null, modifier = Modifier.size(28.dp)) },
             singleLine = true,
             keyboardOptions = KeyboardOptions(
                 keyboardType = KeyboardType.Text,
                 capitalization = KeyboardCapitalization.Characters,
                 autoCorrectEnabled = false,
             ),
+            shape = RoundedCornerShape(16.dp),
             colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = CecapiAccent),
         )
 
@@ -174,34 +175,116 @@ fun RegisterScreen(
             text = "CONTRASEÑA",
             style = CecapiEyebrowStyle,
             color = CecapiTextMuted,
-            modifier = Modifier.padding(top = 20.dp, bottom = 8.dp),
+            modifier = Modifier.padding(top = 24.dp, bottom = 8.dp),
         )
         OutlinedTextField(
             value = uiState.contrasena,
-            onValueChange = viewModel::onContrasenaChange,
+            onValueChange = { viewModel.onContrasenaChange(it.filter(Char::isDigit)) },
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(min = 64.dp)
+                .heightIn(min = 72.dp)
                 .voiceHint(
-                    help = "Campo de contraseña. Elige una clave secreta de al menos cuatro caracteres. " +
+                    help = "Campo de contraseña. Elige una clave de al menos cuatro números. " +
                         "Se ve oculta y nunca la leo en voz alta.",
-                    focusLabel = "Campo de contraseña. Elige una clave de al menos cuatro caracteres.",
+                    focusLabel = "Campo de contraseña. Elige una clave de al menos cuatro números.",
                 ),
-            placeholder = { Text("Mínimo cuatro caracteres") },
-            leadingIcon = { Icon(Icons.Filled.Lock, contentDescription = null) },
+            textStyle = MaterialTheme.typography.titleLarge,
+            placeholder = { Text("Mínimo cuatro números", style = MaterialTheme.typography.titleMedium) },
+            leadingIcon = { Icon(Icons.Filled.Lock, contentDescription = null, modifier = Modifier.size(28.dp)) },
             trailingIcon = {
                 IconButton(onClick = { passwordVisible = !passwordVisible }) {
                     Icon(
                         imageVector = if (passwordVisible) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
                         contentDescription = if (passwordVisible) "Ocultar contraseña" else "Mostrar contraseña",
+                        modifier = Modifier.size(28.dp),
                     )
                 }
             },
             singleLine = true,
             visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+            shape = RoundedCornerShape(16.dp),
             colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = CecapiAccent),
         )
+
+        Text(
+            text = "INSTITUCIÓN",
+            style = CecapiEyebrowStyle,
+            color = CecapiTextMuted,
+            modifier = Modifier.padding(top = 24.dp, bottom = 8.dp),
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            InstitucionRegistro.entries.forEach { opcion ->
+                BigBtn(
+                    icon = Icons.Filled.School,
+                    label = opcion.etiqueta,
+                    variant = if (uiState.institucion == opcion) BigBtnVariant.Accent else BigBtnVariant.Neutral,
+                    half = true,
+                    onClick = { viewModel.onInstitucionChange(opcion) },
+                    modifier = Modifier.weight(1f),
+                )
+            }
+        }
+
+        Text(
+            text = "FECHA DE NACIMIENTO",
+            style = CecapiEyebrowStyle,
+            color = CecapiTextMuted,
+            modifier = Modifier.padding(top = 24.dp, bottom = 8.dp),
+        )
+        // Tres campos numéricos en vez de un calendario pequeño: un selector de fecha estándar es
+        // difícil de usar sin ver. Se escriben o se dictan como cualquier otro campo.
+        var dia by remember { mutableStateOf("") }
+        var mesNum by remember { mutableStateOf("") }
+        var anio by remember { mutableStateOf("") }
+        fun actualizarFecha() {
+            val d = dia.toIntOrNull()
+            val m = mesNum.toIntOrNull()
+            val a = anio.toIntOrNull()
+            if (d != null && m in 1..12 && a != null && a > 1900) {
+                val cal = java.util.Calendar.getInstance()
+                cal.clear()
+                cal.set(a, m!! - 1, d)
+                viewModel.onFechaNacimientoChange(cal.timeInMillis)
+            }
+        }
+        val dateFieldStyle = MaterialTheme.typography.titleLarge.copy(textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+        val dateFieldShape = RoundedCornerShape(16.dp)
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            OutlinedTextField(
+                value = dia,
+                onValueChange = { dia = it.filter(Char::isDigit).take(2); actualizarFecha() },
+                modifier = Modifier.weight(1f).heightIn(min = 72.dp).voiceHint("Día de nacimiento."),
+                textStyle = dateFieldStyle,
+                label = { Text("Día") },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                shape = dateFieldShape,
+                colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = CecapiAccent),
+            )
+            OutlinedTextField(
+                value = mesNum,
+                onValueChange = { mesNum = it.filter(Char::isDigit).take(2); actualizarFecha() },
+                modifier = Modifier.weight(1f).heightIn(min = 72.dp).voiceHint("Mes de nacimiento, del uno al doce."),
+                textStyle = dateFieldStyle,
+                label = { Text("Mes") },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                shape = dateFieldShape,
+                colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = CecapiAccent),
+            )
+            OutlinedTextField(
+                value = anio,
+                onValueChange = { anio = it.filter(Char::isDigit).take(4); actualizarFecha() },
+                modifier = Modifier.weight(1.3f).heightIn(min = 72.dp).voiceHint("Año de nacimiento, con cuatro números."),
+                textStyle = dateFieldStyle,
+                label = { Text("Año") },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                shape = dateFieldShape,
+                colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = CecapiAccent),
+            )
+        }
 
         uiState.errorMessage?.let { error ->
             Text(
@@ -212,22 +295,27 @@ fun RegisterScreen(
             )
         }
 
-        Button(
-            onClick = viewModel::submit,
+        BigBtn(
+            icon = Icons.Filled.Check,
+            label = if (uiState.isSubmitting) "Creando…" else "Crear mi cuenta",
+            variant = BigBtnVariant.Accent,
             enabled = !uiState.isSubmitting,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 24.dp)
-                .heightIn(min = 56.dp)
-                .clip(RoundedCornerShape(50))
-                .voiceHint("Crear mi cuenta. Guarda tus datos y abre tu cuenta nueva."),
-            colors = ButtonDefaults.buttonColors(containerColor = CecapiAccent),
-        ) {
-            if (uiState.isSubmitting) {
-                CircularProgressIndicator(modifier = Modifier.size(20.dp), color = MaterialTheme.colorScheme.onPrimary)
-            } else {
-                Text("Crear mi cuenta", color = MaterialTheme.colorScheme.onPrimary)
-            }
-        }
+            onClick = viewModel::submit,
+            modifier = Modifier.padding(top = 24.dp),
+        )
+    }
+
+        MicPad(
+            listening = listening,
+            onDoubleTap = viewModel::onMicDoubleTap,
+            hint = if (listening) "Escuchando…" else "Di tu nombre, o toca aquí",
+            onClick = {
+                val granted = ContextCompat.checkSelfPermission(
+                    context, Manifest.permission.RECORD_AUDIO,
+                ) == PackageManager.PERMISSION_GRANTED
+                if (granted) viewModel.onMicTapped() else permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+            },
+            modifier = Modifier.align(Alignment.BottomCenter),
+        )
     }
 }

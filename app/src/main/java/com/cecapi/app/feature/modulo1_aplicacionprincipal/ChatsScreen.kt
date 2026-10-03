@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -21,6 +22,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.contentDescription
@@ -33,6 +35,7 @@ import com.cecapi.app.core.theme.CecapiAccent
 import com.cecapi.app.core.theme.CecapiError
 import com.cecapi.app.core.theme.CecapiSurface
 import com.cecapi.app.core.theme.CecapiTextMuted
+import com.cecapi.app.core.ui.MicPad
 import com.cecapi.app.core.ui.NoticeBanner
 import com.cecapi.app.core.ui.ScreenTopBar
 import com.cecapi.app.core.ui.SuggestionChip
@@ -42,6 +45,7 @@ import com.cecapi.app.core.ui.voiceHint
 import com.cecapi.app.core.voice.FeedbackCues
 import com.cecapi.app.core.voice.VoiceEngine
 import com.cecapi.app.core.voice.VoiceMessages
+import com.cecapi.app.core.voice.VoiceState
 import com.cecapi.app.core.voice.VoiceText
 import com.cecapi.app.feature.modulo3_asistenteinteligente.ConsultaIaDao
 import com.cecapi.app.feature.modulo3_asistenteinteligente.RespuestaIaDao
@@ -107,6 +111,10 @@ class ChatsViewModel @Inject constructor(
 
     val chats: StateFlow<List<ChatItem>> = chatsFlow
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    val voiceState: StateFlow<VoiceState> = voiceEngine.state.stateIn(
+        viewModelScope, SharingStarted.WhileSubscribed(5_000), VoiceState.Idle,
+    )
 
     private val _state = MutableStateFlow(ChatsUiState())
     val state: StateFlow<ChatsUiState> = _state.asStateFlow()
@@ -188,6 +196,11 @@ class ChatsViewModel @Inject constructor(
         voiceEngine.speak(CommandCatalog.CHATS, listenAfter = true)
     }
 
+    fun onMicTapped() = voiceEngine.startListening()
+
+    /** Two quick taps on the mic silence the assistant, for someone using touch instead of voice. */
+    fun onMicDoubleTap() = voiceEngine.mute()
+
     fun speakCount() {
         voiceEngine.speak(countText(chats.value.size), listenAfter = chats.value.isNotEmpty())
     }
@@ -262,12 +275,18 @@ fun ChatsScreen(
 ) {
     val chats by viewModel.chats.collectAsState()
     val state by viewModel.state.collectAsState()
+    val voiceState by viewModel.voiceState.collectAsState()
+    val listening = voiceState is VoiceState.Listening
     LaunchedEffect(Unit) { viewModel.routes.collect(onOpen) }
 
     LaunchedEffect(Unit) { viewModel.back.collect { onBack() } }
 
+    Box(modifier = Modifier.fillMaxSize()) {
     Column(
-        modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 16.dp),
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 16.dp, vertical = 16.dp)
+            .padding(bottom = 230.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         ScreenTopBar(
@@ -327,6 +346,15 @@ fun ChatsScreen(
                 )
             }
         }
+    }
+
+        MicPad(
+            listening = listening,
+            onDoubleTap = viewModel::onMicDoubleTap,
+            hint = if (listening) "Escuchando…" else "Di lee el último, o toca aquí",
+            onClick = viewModel::onMicTapped,
+            modifier = Modifier.align(Alignment.BottomCenter),
+        )
     }
 }
 

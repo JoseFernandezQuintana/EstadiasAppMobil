@@ -153,6 +153,7 @@ class DocumentReaderViewModel @Inject constructor(
     fun pedirCaptura() {
         if (_uiState.value.isProcessing || !hayEspacio()) return
         detenerLectura()
+        voiceEngine.speak("Tomando foto.")
         _captureRequests.tryEmit(Unit)
     }
 
@@ -224,14 +225,14 @@ class DocumentReaderViewModel @Inject constructor(
                         parrafos = outcome.parrafos,
                         photoPath = rutaImagen,
                     )
+                    if (outcome.borrosa) {
+                        voiceEngine.speak("La foto salió un poco borrosa. Si algo no se entiende, limpia la cámara e intenta de nuevo.")
+                    }
                     leerParrafo(0)
                     repository.logLectura(outcome.documentoId)
                 }
                 OcrOutcome.PocaLuz -> falloDeLectura(
                     "La imagen está muy oscura. Busca mejor iluminación e intenta de nuevo.",
-                )
-                OcrOutcome.Borrosa -> falloDeLectura(
-                    "La imagen salió borrosa. Sostén el teléfono firme y vuelve a intentar.",
                 )
                 OcrOutcome.SinTexto -> falloDeLectura("No se detectó texto en la imagen.")
                 is OcrOutcome.Error -> falloDeLectura(
@@ -341,6 +342,11 @@ class DocumentReaderViewModel @Inject constructor(
     fun onCommandsRequested() {
         voiceEngine.speak(CommandCatalog.READER, listenAfter = true)
     }
+
+    fun onMicTapped() = voiceEngine.startListening()
+
+    /** Two quick taps on the mic silence the assistant, for someone using touch instead of voice. */
+    fun onMicDoubleTap() = voiceEngine.mute()
 
     /**
      * TextToSpeech no avisa directamente cuándo termina: VoiceEngine pasa de

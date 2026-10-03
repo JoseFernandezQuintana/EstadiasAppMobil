@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.cecapi.app.core.voice.FeedbackCues
 import com.cecapi.app.core.voice.VoiceEngine
 import com.cecapi.app.core.voice.VoiceMessages
+import com.cecapi.app.core.voice.VoiceState
 import com.cecapi.app.core.voice.VoiceText
 import com.cecapi.app.core.voice.WakeWordController
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -13,8 +14,10 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -45,6 +48,10 @@ class LoginViewModel @Inject constructor(
 
     private val _uiState = MutableStateFlow(LoginUiState())
     val uiState: StateFlow<LoginUiState> = _uiState.asStateFlow()
+
+    val voiceState: StateFlow<VoiceState> = voiceEngine.state.stateIn(
+        viewModelScope, SharingStarted.WhileSubscribed(5_000), VoiceState.Idle,
+    )
 
     private val _loginSucceeded = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     val loginSucceeded: SharedFlow<Unit> = _loginSucceeded
@@ -284,6 +291,17 @@ class LoginViewModel @Inject constructor(
 
     fun onMicPermissionDenied() {
         voiceEngine.speak(VoiceMessages.MIC_DENIED)
+    }
+
+    /** Two quick taps on the mic silence the assistant, for someone using touch instead of voice. */
+    fun onMicDoubleTap() = voiceEngine.mute()
+
+    fun onCommandsRequested() {
+        voiceEngine.speak(
+            "Di usuario para dictar tu usuario, o contraseña para dictar tu contraseña, o escríbelos abajo. " +
+                "Di ingresar cuando tengas los dos.",
+            listenAfter = true,
+        )
     }
 
     fun submit() {

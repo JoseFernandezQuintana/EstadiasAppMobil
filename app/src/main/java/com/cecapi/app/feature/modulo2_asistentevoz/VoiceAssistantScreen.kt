@@ -26,8 +26,9 @@ import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.cecapi.app.core.theme.CecapiEyebrowStyle
 import com.cecapi.app.core.theme.CecapiTextMuted
+import com.cecapi.app.core.ui.MicPad
+import com.cecapi.app.core.ui.ScreenTopBar
 import com.cecapi.app.core.ui.VoiceCaptionBubble
-import com.cecapi.app.core.ui.VoiceMicButton
 import com.cecapi.app.core.voice.VoiceState
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -35,6 +36,7 @@ import java.util.Locale
 
 @Composable
 fun VoiceAssistantScreen(
+    onBack: () -> Unit,
     onNavigateToModule: (String) -> Unit,
     viewModel: VoiceAssistantViewModel = hiltViewModel(),
 ) {
@@ -50,28 +52,16 @@ fun VoiceAssistantScreen(
         viewModel.navEvents.collect(onNavigateToModule)
     }
 
-    Column(modifier = Modifier.fillMaxSize().padding(24.dp)) {
-        Text("ASISTENTE DE VOZ", style = CecapiEyebrowStyle, color = CecapiTextMuted)
-        Text(
-            "Comando por voz para todo el sistema",
-            style = MaterialTheme.typography.headlineMedium,
-            color = MaterialTheme.colorScheme.onBackground,
-        )
+    val listening = voiceState is VoiceState.Listening
 
-        Box(
-            modifier = Modifier.fillMaxWidth().padding(vertical = 32.dp),
-            contentAlignment = Alignment.Center,
-        ) {
-            VoiceMicButton(
-                isListening = voiceState is VoiceState.Listening,
-                onClick = {
-                    val granted = ContextCompat.checkSelfPermission(
-                        context, Manifest.permission.RECORD_AUDIO,
-                    ) == PackageManager.PERMISSION_GRANTED
-                    if (granted) viewModel.onMicTapped() else permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-                },
-            )
-        }
+    Box(modifier = Modifier.fillMaxSize()) {
+    Column(modifier = Modifier.fillMaxSize().padding(24.dp).padding(bottom = 230.dp)) {
+        ScreenTopBar(
+            eyebrow = "ASISTENTE DE VOZ",
+            title = "Comando por voz",
+            onBack = onBack,
+            onCommands = { viewModel.onMicTapped() },
+        )
 
         VoiceCaptionBubble(
             text = (voiceState as? VoiceState.Speaking)?.text ?: "Di el nombre de un módulo para abrirlo.",
@@ -109,5 +99,19 @@ fun VoiceAssistantScreen(
                 }
             }
         }
+    }
+
+        MicPad(
+            listening = listening,
+            onDoubleTap = viewModel::onMicDoubleTap,
+            hint = if (listening) "Escuchando…" else "Di el nombre de un módulo, o toca aquí",
+            onClick = {
+                val granted = ContextCompat.checkSelfPermission(
+                    context, Manifest.permission.RECORD_AUDIO,
+                ) == PackageManager.PERMISSION_GRANTED
+                if (granted) viewModel.onMicTapped() else permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+            },
+            modifier = Modifier.align(Alignment.BottomCenter),
+        )
     }
 }

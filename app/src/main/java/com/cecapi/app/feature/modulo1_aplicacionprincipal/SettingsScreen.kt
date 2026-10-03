@@ -9,6 +9,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -31,9 +32,17 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Logout
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.NotificationsActive
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Shield
+import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -64,16 +73,24 @@ import com.cecapi.app.core.theme.CecapiEyebrowStyle
 import com.cecapi.app.core.theme.CecapiSurface
 import com.cecapi.app.core.theme.CecapiSurfaceElevated
 import com.cecapi.app.core.theme.CecapiTextMuted
+import com.cecapi.app.core.theme.Sections
+import com.cecapi.app.core.ui.BigBtn
+import com.cecapi.app.core.ui.BigBtnVariant
+import com.cecapi.app.core.ui.MicPad
 import com.cecapi.app.core.ui.NoticeBanner
 import com.cecapi.app.core.ui.ScreenTopBar
 import com.cecapi.app.core.ui.SuggestionChip
 import com.cecapi.app.core.ui.voiceHint
+import com.cecapi.app.core.voice.VoiceState
 import kotlin.math.roundToInt
 
+private enum class SettingsSub { VOLUMEN, NOTIFICACIONES, ALMACENAMIENTO, PRIVACIDAD, CUENTA }
+
 /**
- * Configuración, in blocks so each thing has one obvious place: Volumen, Notificaciones,
- * Escuchar fuera de la aplicación, Accesibilidad and (only when signed in) Cuenta.
- * The assistant's voice and names are in Personalización.
+ * Configuración, como un vestíbulo con una tarjeta por tema en vez de una sola columna larga:
+ * Volumen, Notificaciones, Almacenamiento y Privacidad (que agrupa escuchar fuera de la app, IA
+ * y modo simple) abren su propia pantalla. Cuenta (cerrar sesión / borrar cuenta) solo aparece
+ * con sesión iniciada. La voz y los nombres del asistente están en Personalización.
  */
 @Composable
 fun SettingsScreen(
@@ -92,13 +109,11 @@ fun SettingsScreen(
     val awaitingDeletePassword by viewModel.awaitingDeletePassword.collectAsState()
     var deletePassword by remember { mutableStateOf("") }
     var deletePasswordVisible by remember { mutableStateOf(false) }
-    val editandoCuenta by viewModel.editandoCuenta.collectAsState()
-    var nombreEditado by remember(user?.nombreCompleto, editandoCuenta) { mutableStateOf(user?.nombreCompleto.orEmpty()) }
-    var contrasenaActualEdit by remember(editandoCuenta) { mutableStateOf("") }
-    var contrasenaNuevaEdit by remember(editandoCuenta) { mutableStateOf("") }
-    var contrasenaEditVisible by remember { mutableStateOf(false) }
+    var sub by remember { mutableStateOf<SettingsSub?>(null) }
 
     var volume by remember { mutableFloatStateOf(viewModel.currentVolumePercent().toFloat()) }
+    val voiceState by viewModel.voiceState.collectAsState()
+    val listening = voiceState is VoiceState.Listening
 
     LaunchedEffect(Unit) { viewModel.loggedOut.collect { onLoggedOut() } }
 
@@ -129,153 +144,196 @@ fun SettingsScreen(
     LaunchedEffect(Unit) { viewModel.listenOutsideRequests.collect { changeListenOutside(it) } }
     LaunchedEffect(Unit) { viewModel.back.collect { onBack() } }
 
+    Box(modifier = Modifier.fillMaxSize()) {
     Column(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 24.dp, vertical = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
+            .padding(horizontal = 24.dp, vertical = 16.dp)
+            .padding(bottom = 230.dp),
+        verticalArrangement = Arrangement.spacedBy(20.dp),
     ) {
-        ScreenTopBar(
-            eyebrow = "MENÚ",
-            title = "Configuración",
-            onBack = onBack,
-            onCommands = viewModel::onCommandsRequested,
-        )
+        when (sub) {
+            null -> {
+                ScreenTopBar(eyebrow = "MENÚ", title = "Configuración", onBack = onBack, onCommands = viewModel::onCommandsRequested)
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+                    BigBtn(
+                        icon = Icons.Filled.VolumeUp,
+                        label = "Volumen",
+                        section = Sections.Settings,
+                        half = true,
+                        onClick = { sub = SettingsSub.VOLUMEN },
+                        modifier = Modifier.weight(1f),
+                    )
+                    BigBtn(
+                        icon = Icons.Filled.NotificationsActive,
+                        label = "Notificaciones",
+                        section = Sections.Settings,
+                        half = true,
+                        onClick = { sub = SettingsSub.NOTIFICACIONES },
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+                    BigBtn(
+                        icon = Icons.Filled.Storage,
+                        label = "Almacenamiento",
+                        section = Sections.Settings,
+                        half = true,
+                        onClick = { sub = SettingsSub.ALMACENAMIENTO },
+                        modifier = Modifier.weight(1f),
+                    )
+                    BigBtn(
+                        icon = Icons.Filled.Shield,
+                        label = "Privacidad",
+                        section = Sections.Settings,
+                        half = true,
+                        onClick = { sub = SettingsSub.PRIVACIDAD },
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+                if (user != null) {
+                    BigBtn(
+                        icon = Icons.Filled.Person,
+                        label = "Cuenta",
+                        sub = "Con quién iniciaste sesión, cerrar sesión o borrar tu cuenta",
+                        section = Sections.Settings,
+                        onClick = { sub = SettingsSub.CUENTA },
+                    )
+                }
+            }
 
-        Section("VOLUMEN", "Qué tan fuerte se oye todo en el teléfono") {
-            SliderRow(
-                label = "Volumen",
-                valueText = "${volume.roundToInt()}%",
-                value = volume,
-                range = 1f..100f,
-                steps = 0,
-                onChange = { volume = it },
-                onFinished = { viewModel.onVolumeChanged(volume.roundToInt()) },
-                help = "Volumen. Sube o baja el volumen de todo el teléfono, igual que los botones laterales. " +
-                    "No baja hasta silencio para que siempre me escuches.",
-            )
-        }
-
-        Section("NOTIFICACIONES", "Que te lea los mensajes y avisos del teléfono cuando se lo pidas") {
-            Text(
-                text = if (notificationAccess) "Acceso concedido" else "Falta dar acceso",
-                style = MaterialTheme.typography.titleMedium,
-                color = if (notificationAccess) CecapiAccent else CecapiError,
-            )
-            if (!notificationAccess) {
-                Text(
-                    "Android pide que lo actives tú, una sola vez, en sus ajustes. Busca CECAPI y enciéndelo.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = CecapiTextMuted,
-                )
-                ActionButton(
-                    "Dar acceso a notificaciones",
-                    "Dar acceso a notificaciones. Abre los ajustes de Android, donde debes buscar CECAPI y activarlo.",
-                    viewModel::onOpenNotificationSettings,
-                )
-            } else {
-                Text(
-                    "Di: qué notificaciones tengo, léeme la última, o léelas todas.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = CecapiTextMuted,
+            SettingsSub.VOLUMEN -> {
+                ScreenTopBar(eyebrow = "CONFIGURACIÓN", title = "Volumen", onBack = { sub = null }, onCommands = viewModel::onCommandsRequested)
+                SliderRow(
+                    label = "Volumen",
+                    valueText = "${volume.roundToInt()}%",
+                    value = volume,
+                    range = 1f..100f,
+                    steps = 0,
+                    onChange = { volume = it },
+                    onFinished = { viewModel.onVolumeChanged(volume.roundToInt()) },
+                    help = "Volumen. Sube o baja el volumen de todo el teléfono, igual que los botones laterales. " +
+                        "No baja hasta silencio para que siempre me escuches.",
                 )
             }
-            SwitchRow(
-                label = "Avisar cuando llegan",
-                description = "Dice solo \"nueva notificación de\" y la app, nunca el contenido",
-                checked = announceNotifications,
-                onChange = viewModel::onAnnounceNotificationsChanged,
-                help = "Avisar cuando llegan. Cuando entra una notificación digo de qué aplicación es, " +
-                    "pero nunca leo lo que dice si no me lo pides. No aviso durante llamadas ni con No molestar.",
-            )
-        }
 
-        Section("ALMACENAMIENTO", "Cuánto espacio queda en el teléfono y cuánto ocupa la aplicación") {
-            val usage = storage
-            if (usage == null) {
-                Text("Calculando…", style = MaterialTheme.typography.bodyMedium, color = CecapiTextMuted)
-            } else {
-                if (usage.lowSpace) NoticeBanner("Queda poco espacio en el teléfono. Conviene liberar espacio.")
+            SettingsSub.NOTIFICACIONES -> {
+                ScreenTopBar(eyebrow = "CONFIGURACIÓN", title = "Notificaciones", onBack = { sub = null }, onCommands = viewModel::onCommandsRequested)
                 Text(
-                    text = viewModel.describeStorage(usage),
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onBackground,
+                    text = if (notificationAccess) "Acceso concedido" else "Falta dar acceso",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = if (notificationAccess) CecapiAccent else CecapiError,
                 )
-                if (usage.oldPhotoCount > 0) {
+                if (!notificationAccess) {
                     Text(
-                        "${usage.oldPhotoCount} fotos tienen más de un mes y se pueden borrar.",
+                        "Android pide que lo actives tú, una sola vez, en sus ajustes. Busca CECAPI y enciéndelo.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = CecapiTextMuted,
+                    )
+                    ActionButton(
+                        "Dar acceso a notificaciones",
+                        "Dar acceso a notificaciones. Abre los ajustes de Android, donde debes buscar CECAPI y activarlo.",
+                        viewModel::onOpenNotificationSettings,
+                    )
+                } else {
+                    Text(
+                        "Di: qué notificaciones tengo, léeme la última, o léelas todas.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = CecapiTextMuted,
                     )
                 }
+                SwitchRow(
+                    label = "Avisar cuando llegan",
+                    description = "Dice solo \"nueva notificación de\" y la app, nunca el contenido",
+                    checked = announceNotifications,
+                    onChange = viewModel::onAnnounceNotificationsChanged,
+                    help = "Avisar cuando llegan. Cuando entra una notificación digo de qué aplicación es, " +
+                        "pero nunca leo lo que dice si no me lo pides. No aviso durante llamadas ni con No molestar.",
+                )
             }
-            if (pendingClean) {
-                NoticeBanner("¿Borrar las fotos de más de un mes? Di sí o no.")
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    SuggestionChip(label = "sí", onClick = viewModel::confirmClean)
-                    SuggestionChip(label = "no", onClick = viewModel::cancelClean)
+
+            SettingsSub.ALMACENAMIENTO -> {
+                ScreenTopBar(eyebrow = "CONFIGURACIÓN", title = "Almacenamiento", onBack = { sub = null }, onCommands = viewModel::onCommandsRequested)
+                val usage = storage
+                if (usage == null) {
+                    Text("Calculando…", style = MaterialTheme.typography.bodyMedium, color = CecapiTextMuted)
+                } else {
+                    if (usage.lowSpace) NoticeBanner("Queda poco espacio en el teléfono. Conviene liberar espacio.")
+                    Text(
+                        text = viewModel.describeStorage(usage),
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onBackground,
+                    )
+                    if (usage.oldPhotoCount > 0) {
+                        Text(
+                            "${usage.oldPhotoCount} fotos tienen más de un mes y se pueden borrar.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = CecapiTextMuted,
+                        )
+                    }
                 }
-            } else {
-                ActionButton(
-                    "Liberar espacio",
-                    "Liberar espacio. Borra las fotos que la aplicación guardó hace más de un mes. " +
-                        "Te pido confirmación antes de borrar y el texto que leí sigue guardado. También puedes decir: libera espacio.",
-                    viewModel::askClean,
+                if (pendingClean) {
+                    NoticeBanner("¿Borrar las fotos de más de un mes? Di sí o no.")
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        SuggestionChip(label = "sí", onClick = viewModel::confirmClean)
+                        SuggestionChip(label = "no", onClick = viewModel::cancelClean)
+                    }
+                } else {
+                    ActionButton(
+                        "Liberar espacio",
+                        "Liberar espacio. Borra las fotos que la aplicación guardó hace más de un mes. " +
+                            "Te pido confirmación antes de borrar y el texto que leí sigue guardado. También puedes decir: libera espacio.",
+                        viewModel::askClean,
+                    )
+                    ActionButton(
+                        "Vaciar memoria temporal",
+                        "Vaciar memoria temporal. Borra archivos temporales que la aplicación y sus librerías guardan para ir más rápido. " +
+                            "No borra tus chats ni nada que hayas hecho. También puedes decir: limpia la caché.",
+                        viewModel::clearCache,
+                    )
+                    ActionButton(
+                        "Escuchar el reporte",
+                        "Escuchar el reporte. Te digo cuánto espacio libre queda y cuánto ocupa la aplicación. " +
+                            "También puedes decir: cuánto espacio tengo.",
+                        viewModel::speakStorage,
+                    )
+                }
+            }
+
+            SettingsSub.PRIVACIDAD -> {
+                ScreenTopBar(eyebrow = "CONFIGURACIÓN", title = "Privacidad", onBack = { sub = null }, onCommands = viewModel::onCommandsRequested)
+                SwitchRow(
+                    label = "Escuchar fuera de la aplicación",
+                    description = "Muestra un aviso fijo mientras escucha. Di \"para\" para detenerlo",
+                    checked = listenOutsideApp,
+                    onChange = changeListenOutside,
+                    help = "Escuchar fuera de la aplicación. Sigo atento a la palabra hola o a mi nombre aunque cierres " +
+                        "la aplicación. Mientras tanto verás un aviso fijo, y puedes detenerme diciendo para. " +
+                        "Gasta más batería.",
                 )
-                ActionButton(
-                    "Vaciar memoria temporal",
-                    "Vaciar memoria temporal. Borra archivos temporales que la aplicación y sus librerías guardan para ir más rápido. " +
-                        "No borra tus chats ni nada que hayas hecho. También puedes decir: limpia la caché.",
-                    viewModel::clearCache,
+                SwitchRow(
+                    label = "Inteligencia artificial en internet",
+                    description = "Todavía no está conectada. No la actives si quien usa la aplicación es menor de edad",
+                    checked = aiEnabled,
+                    onChange = viewModel::onAiEnabledChanged,
+                    help = "Inteligencia artificial en internet. Apagada, ninguna de tus preguntas se envía a un servidor para interpretarla. " +
+                        "Encendida, cuando no entienda una frase y haya internet, podrá enviarla a un servidor para interpretarla. " +
+                        "Esto no cambia el reconocimiento de voz del teléfono, que sigue funcionando igual. " +
+                        "Los proveedores de inteligencia artificial no permiten su uso con menores de edad. " +
+                        "También puedes decir: activa la inteligencia artificial, o desactívala.",
                 )
-                ActionButton(
-                    "Escuchar el reporte",
-                    "Escuchar el reporte. Te digo cuánto espacio libre queda y cuánto ocupa la aplicación. " +
-                        "También puedes decir: cuánto espacio tengo.",
-                    viewModel::speakStorage,
+                SwitchRow(
+                    label = "Modo simple",
+                    description = "Menús más grandes y con menos opciones a la vez",
+                    checked = simpleMode,
+                    onChange = viewModel::onSimpleModeChanged,
+                    help = "Modo simple. Muestra los menús más grandes y con menos opciones a la vez.",
                 )
             }
-        }
 
-        Section("ESCUCHAR FUERA DE LA APLICACIÓN", "Seguir atento a \"hola\" aunque cierres la aplicación") {
-            SwitchRow(
-                label = "Escuchar fuera de la aplicación",
-                description = "Muestra un aviso fijo mientras escucha. Di \"para\" para detenerlo",
-                checked = listenOutsideApp,
-                onChange = changeListenOutside,
-                help = "Escuchar fuera de la aplicación. Sigo atento a la palabra hola o a mi nombre aunque cierres " +
-                    "la aplicación. Mientras tanto verás un aviso fijo, y puedes detenerme diciendo para. " +
-                    "Gasta más batería.",
-            )
-        }
-
-        Section("PRIVACIDAD", "Qué sale de tu teléfono: por defecto, nada") {
-            SwitchRow(
-                label = "Inteligencia artificial en internet",
-                description = "Todavía no está conectada. No la actives si quien usa la aplicación es menor de edad",
-                checked = aiEnabled,
-                onChange = viewModel::onAiEnabledChanged,
-                help = "Inteligencia artificial en internet. Apagada, ninguna de tus preguntas se envía a un servidor para interpretarla. " +
-                    "Encendida, cuando no entienda una frase y haya internet, podrá enviarla a un servidor para interpretarla. " +
-                    "Esto no cambia el reconocimiento de voz del teléfono, que sigue funcionando igual. " +
-                    "Los proveedores de inteligencia artificial no permiten su uso con menores de edad. " +
-                    "También puedes decir: activa la inteligencia artificial, o desactívala.",
-            )
-        }
-
-        Section("ACCESIBILIDAD", "Para que todo sea más fácil de usar") {
-            SwitchRow(
-                label = "Modo simple",
-                description = "Menús más grandes y con menos opciones a la vez",
-                checked = simpleMode,
-                onChange = viewModel::onSimpleModeChanged,
-                help = "Modo simple. Muestra los menús más grandes y con menos opciones a la vez.",
-            )
-        }
-
-        user?.let { current ->
-            Section("CUENTA", "Con quién iniciaste sesión") {
+            SettingsSub.CUENTA -> user?.let { current ->
+                ScreenTopBar(eyebrow = "MENÚ", title = "Cuenta", onBack = { sub = null }, onCommands = viewModel::onCommandsRequested)
                 Text(current.nombreCompleto, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onBackground)
                 Text(
                     buildString {
@@ -285,85 +343,17 @@ fun SettingsScreen(
                     style = MaterialTheme.typography.bodyMedium,
                     color = CecapiTextMuted,
                 )
-                if (!editandoCuenta) {
-                    Button(
-                        onClick = viewModel::onEditarCuenta,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(min = 56.dp)
-                            .semantics { contentDescription = "Editar mi cuenta. Cambia tu nombre o tu contraseña." }
-                            .voiceHint("Editar mi cuenta. Cambia tu nombre o tu contraseña; te pide tu contraseña actual para confirmar."),
-                        colors = ButtonDefaults.buttonColors(containerColor = CecapiSurfaceElevated, contentColor = CecapiAccent),
-                    ) {
-                        Text("Editar mi cuenta", style = MaterialTheme.typography.titleMedium)
-                    }
-                } else {
-                    NoticeBanner("Cambia lo que quieras y confirma con tu contraseña actual.")
-                    OutlinedTextField(
-                        value = nombreEditado,
-                        onValueChange = { nombreEditado = it },
-                        modifier = Modifier.fillMaxWidth().voiceHint("Tu nombre completo."),
-                        placeholder = { Text("Tu nombre completo") },
-                        singleLine = true,
-                        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = CecapiAccent, unfocusedBorderColor = CecapiTextMuted),
-                    )
-                    OutlinedTextField(
-                        value = contrasenaNuevaEdit,
-                        onValueChange = { contrasenaNuevaEdit = it },
-                        modifier = Modifier.fillMaxWidth().voiceHint("Nueva contraseña, si quieres cambiarla. Déjalo vacío para no cambiarla."),
-                        placeholder = { Text("Nueva contraseña (opcional)") },
-                        leadingIcon = { Icon(Icons.Filled.Lock, contentDescription = null) },
-                        singleLine = true,
-                        visualTransformation = if (contrasenaEditVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                        trailingIcon = {
-                            IconButton(onClick = { contrasenaEditVisible = !contrasenaEditVisible }) {
-                                Icon(
-                                    imageVector = if (contrasenaEditVisible) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
-                                    contentDescription = if (contrasenaEditVisible) "Ocultar contraseña" else "Mostrar contraseña",
-                                )
-                            }
-                        },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = CecapiAccent, unfocusedBorderColor = CecapiTextMuted),
-                    )
-                    OutlinedTextField(
-                        value = contrasenaActualEdit,
-                        onValueChange = { contrasenaActualEdit = it },
-                        modifier = Modifier.fillMaxWidth().voiceHint("Tu contraseña actual, para confirmar los cambios."),
-                        placeholder = { Text("Tu contraseña actual, para confirmar") },
-                        leadingIcon = { Icon(Icons.Filled.Lock, contentDescription = null) },
-                        singleLine = true,
-                        visualTransformation = PasswordVisualTransformation(),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
-                        keyboardActions = KeyboardActions(
-                            onDone = { viewModel.onGuardarPerfil(nombreEditado, contrasenaActualEdit, contrasenaNuevaEdit) },
-                        ),
-                        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = CecapiAccent, unfocusedBorderColor = CecapiTextMuted),
-                    )
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Button(
-                            onClick = { viewModel.onGuardarPerfil(nombreEditado, contrasenaActualEdit, contrasenaNuevaEdit) },
-                            colors = ButtonDefaults.buttonColors(containerColor = CecapiAccent),
-                        ) { Text("Guardar", color = MaterialTheme.colorScheme.onPrimary) }
-                        Button(onClick = viewModel::onCancelarEdicion) { Text("Cancelar") }
-                    }
-                }
-                Button(
+                BigBtn(
+                    icon = Icons.AutoMirrored.Filled.Logout,
+                    label = "Cerrar sesión",
+                    variant = BigBtnVariant.Danger,
                     onClick = viewModel::onLogout,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(min = 56.dp)
-                        .semantics { contentDescription = "Cerrar sesión. Toca dos veces para salir de tu cuenta." }
-                        .voiceHint("Cerrar sesión. Sale de tu cuenta y vuelve al inicio. Tus datos se conservan."),
-                    colors = ButtonDefaults.buttonColors(containerColor = CecapiError, contentColor = Color.White),
-                ) {
-                    Text("Cerrar sesión", style = MaterialTheme.typography.titleMedium)
-                }
+                )
                 if (awaitingDeletePassword) {
                     NoticeBanner("Para borrar tu cuenta, dime o escribe tu contraseña.")
                     OutlinedTextField(
                         value = deletePassword,
-                        onValueChange = { deletePassword = it },
+                        onValueChange = { deletePassword = it.filter(Char::isDigit) },
                         modifier = Modifier
                             .fillMaxWidth()
                             .heightIn(min = 64.dp)
@@ -380,19 +370,29 @@ fun SettingsScreen(
                         },
                         singleLine = true,
                         visualTransformation = if (deletePasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword, imeAction = ImeAction.Done),
                         keyboardActions = KeyboardActions(onDone = {
                             viewModel.onDeletePasswordEntered(deletePassword)
                             deletePassword = ""
                         }),
                         colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = CecapiAccent, unfocusedBorderColor = CecapiTextMuted),
                     )
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 8.dp)) {
-                        Button(
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.padding(top = 8.dp)) {
+                        BigBtn(
+                            icon = Icons.Filled.Check,
+                            label = "Confirmar",
+                            variant = BigBtnVariant.Danger,
+                            half = true,
                             onClick = { viewModel.onDeletePasswordEntered(deletePassword); deletePassword = "" },
-                            colors = ButtonDefaults.buttonColors(containerColor = CecapiError, contentColor = Color.White),
-                        ) { Text("Confirmar") }
-                        Button(onClick = { deletePassword = ""; viewModel.cancelDeleteAccount() }) { Text("Cancelar") }
+                            modifier = Modifier.weight(1f),
+                        )
+                        BigBtn(
+                            icon = Icons.Filled.Close,
+                            label = "Cancelar",
+                            half = true,
+                            onClick = { deletePassword = ""; viewModel.cancelDeleteAccount() },
+                            modifier = Modifier.weight(1f),
+                        )
                     }
                 } else if (pendingDeleteAccount) {
                     NoticeBanner("¿Borrar tu cuenta y todo lo que guardaste? No se puede deshacer. Di sí, borrar, o no.")
@@ -411,24 +411,14 @@ fun SettingsScreen(
             }
         }
     }
-}
 
-/** One block of the screen: a title, one line saying what it is for, then its controls. */
-@Composable
-internal fun Section(title: String, subtitle: String, content: @Composable () -> Unit) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(20.dp))
-            .background(CecapiSurface)
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
-    ) {
-        Column {
-            Text(title, style = CecapiEyebrowStyle, color = CecapiAccent)
-            Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = CecapiTextMuted, modifier = Modifier.padding(top = 2.dp))
-        }
-        content()
+        MicPad(
+            listening = listening,
+            onDoubleTap = viewModel::onMicDoubleTap,
+            hint = if (listening) "Escuchando…" else "Di cuánto espacio tengo, o toca aquí",
+            onClick = viewModel::onMicTapped,
+            modifier = Modifier.align(Alignment.BottomCenter),
+        )
     }
 }
 
@@ -504,13 +494,3 @@ internal fun ActionButton(text: String, help: String, onClick: () -> Unit) {
     }
 }
 
-@Composable
-internal fun SmallButton(text: String, help: String, onClick: () -> Unit) {
-    Button(
-        onClick = onClick,
-        modifier = Modifier.heightIn(min = 48.dp).voiceHint(help),
-        colors = ButtonDefaults.buttonColors(containerColor = CecapiSurfaceElevated, contentColor = CecapiAccent),
-    ) {
-        Text(text)
-    }
-}

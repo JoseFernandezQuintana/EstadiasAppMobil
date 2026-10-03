@@ -114,7 +114,7 @@ fun ModuleCarousel(
                 verticalArrangement = Arrangement.SpaceBetween,
             ) {
                 Box(
-                    modifier = Modifier.size(48.dp).clip(CircleShape).background(item.accent.copy(alpha = 0.18f)),
+                    modifier = Modifier.size(48.dp).clip(RoundedCornerShape(14.dp)).background(item.accent.copy(alpha = 0.18f)),
                     contentAlignment = Alignment.Center,
                 ) {
                     Box(modifier = Modifier.size(14.dp).clip(CircleShape).background(item.accent))

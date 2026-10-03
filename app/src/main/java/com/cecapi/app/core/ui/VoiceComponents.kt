@@ -79,23 +79,47 @@ fun VoiceMicButton(
     }
 }
 
-/** The recurring "what the app just said" caption bubble seen throughout the prototype. */
+/**
+ * The recurring "what the app just said" caption bubble seen throughout the prototype.
+ * Pass [plain] = true over a live camera image (e.g. "Qué hay enfrente"): no card, no
+ * background, just the text with a shadow for contrast — Pp's rule is that this one
+ * screen never gets a text box floating over the picture.
+ */
 @Composable
-fun VoiceCaptionBubble(text: String, modifier: Modifier = Modifier) {
+fun VoiceCaptionBubble(text: String, modifier: Modifier = Modifier, plain: Boolean = false) {
+    val textStyle = if (plain) {
+        MaterialTheme.typography.bodyLarge.copy(
+            shadow = androidx.compose.ui.graphics.Shadow(
+                color = androidx.compose.ui.graphics.Color.Black,
+                blurRadius = 12f,
+            ),
+        )
+    } else {
+        MaterialTheme.typography.bodyMedium
+    }
+    val textColor = if (plain) androidx.compose.ui.graphics.Color.White else MaterialTheme.colorScheme.onBackground
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
-            .background(CecapiSurface)
-            .padding(16.dp)
+            .then(
+                if (plain) {
+                    Modifier
+                } else {
+                    Modifier.clip(RoundedCornerShape(20.dp)).background(CecapiSurface).padding(16.dp)
+                },
+            )
             .semantics { liveRegion = LiveRegionMode.Polite },
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.AutoMirrored.Filled.VolumeUp, contentDescription = null, tint = CecapiAccent)
+            Icon(
+                Icons.AutoMirrored.Filled.VolumeUp,
+                contentDescription = null,
+                tint = if (plain) androidx.compose.ui.graphics.Color.White else CecapiAccent,
+            )
             Text(
                 text = text,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onBackground,
+                style = textStyle,
+                color = textColor,
                 modifier = Modifier.padding(start = 12.dp),
             )
         }

@@ -6,6 +6,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -39,11 +40,18 @@ import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.cecapi.app.core.theme.CecapiAccent
 import com.cecapi.app.core.theme.CecapiEyebrowStyle
-import com.cecapi.app.core.theme.CecapiSurface
 import com.cecapi.app.core.theme.CecapiTextMuted
+import com.cecapi.app.core.theme.Sections
+import com.cecapi.app.core.ui.BigBtn
+import com.cecapi.app.core.ui.BigBtnVariant
+import com.cecapi.app.core.ui.MicPad
+import com.cecapi.app.core.ui.ScreenTopBar
 import com.cecapi.app.core.ui.VoiceCaptionBubble
-import com.cecapi.app.core.ui.VoiceMicButton
 import com.cecapi.app.core.voice.VoiceState
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowForward
+import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.Refresh
 
 @Composable
 fun RequestsScreen(
@@ -61,27 +69,36 @@ fun RequestsScreen(
         ActivityResultContracts.RequestPermission(),
     ) { granted -> if (granted) viewModel.onMicTapped() }
 
-    Column(modifier = Modifier.fillMaxSize().padding(24.dp)) {
-        Text("CENTRO DE SOLICITUDES", style = CecapiEyebrowStyle, color = CecapiTextMuted)
-        Text(
-            "Solicitudes CECAPI",
-            style = MaterialTheme.typography.headlineMedium,
-            color = MaterialTheme.colorScheme.onBackground,
+    val listening = voiceState is VoiceState.Listening
+    val enPregunta = uiState.plantillaSeleccionada != null
+
+    Box(modifier = Modifier.fillMaxSize()) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(24.dp)
+            .padding(bottom = 230.dp),
+    ) {
+        ScreenTopBar(
+            eyebrow = "DOCUMENTOS",
+            title = "Solicitudes",
+            onBack = onBack,
+            onCommands = viewModel::onCommandsRequested,
         )
 
         when {
             uiState.textoGenerado != null -> {
                 VoiceCaptionBubble(text = uiState.textoGenerado!!, modifier = Modifier.padding(top = 20.dp))
-                Button(
+                BigBtn(
+                    icon = Icons.Filled.Refresh,
+                    label = "Crear otra solicitud",
+                    variant = BigBtnVariant.Accent,
                     onClick = viewModel::onReiniciar,
-                    modifier = Modifier.fillMaxWidth().padding(top = 20.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = CecapiAccent),
-                ) {
-                    Text("Crear otra solicitud", color = MaterialTheme.colorScheme.onPrimary)
-                }
+                    modifier = Modifier.padding(top = 20.dp),
+                )
             }
 
-            uiState.plantillaSeleccionada != null -> {
+            enPregunta -> {
                 var respuestaTexto by remember(uiState.indiceActual) { mutableStateOf("") }
 
                 VoiceCaptionBubble(
@@ -89,39 +106,23 @@ fun RequestsScreen(
                     modifier = Modifier.padding(top = 20.dp),
                 )
 
-                Box(modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp), contentAlignment = Alignment.Center) {
-                    VoiceMicButton(
-                        isListening = voiceState is VoiceState.Listening,
-                        onDoubleTap = viewModel::onMicDoubleTap,
-                        onClick = {
-                            val granted = ContextCompat.checkSelfPermission(
-                                context, Manifest.permission.RECORD_AUDIO,
-                            ) == PackageManager.PERMISSION_GRANTED
-                            if (granted) viewModel.onMicTapped() else permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-                        },
-                    )
-                }
-
                 OutlinedTextField(
                     value = respuestaTexto,
                     onValueChange = { respuestaTexto = it },
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().padding(top = 24.dp),
                     placeholder = { Text("O escribe tu respuesta aquí") },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                     colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = CecapiAccent),
                 )
-                Button(
-                    onClick = {
-                        if (respuestaTexto.isNotBlank()) {
-                            viewModel.onAnswerProvided(respuestaTexto)
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = CecapiAccent),
-                ) {
-                    Text("Continuar", color = MaterialTheme.colorScheme.onPrimary)
-                }
+                BigBtn(
+                    icon = Icons.Filled.ArrowForward,
+                    label = "Continuar",
+                    variant = BigBtnVariant.Accent,
+                    enabled = respuestaTexto.isNotBlank(),
+                    onClick = { viewModel.onAnswerProvided(respuestaTexto) },
+                    modifier = Modifier.padding(top = 12.dp),
+                )
             }
 
             else -> {
@@ -131,33 +132,35 @@ fun RequestsScreen(
                     color = CecapiTextMuted,
                     modifier = Modifier.padding(top = 20.dp, bottom = 12.dp),
                 )
-                LazyColumn(contentPadding = PaddingValues(bottom = 16.dp)) {
+                LazyColumn(
+                    contentPadding = PaddingValues(bottom = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp),
+                ) {
                     items(plantillas, key = { it.id }) { plantilla ->
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(bottom = 12.dp)
-                                .clip(RoundedCornerShape(16.dp))
-                                .background(CecapiSurface)
-                                .clickable { viewModel.onPlantillaSelected(plantilla) }
-                                .padding(16.dp),
-                        ) {
-                            Column {
-                                Text(
-                                    plantilla.titulo,
-                                    style = MaterialTheme.typography.titleMedium,
-                                    color = MaterialTheme.colorScheme.onBackground,
-                                )
-                                Text(
-                                    plantilla.descripcion,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = CecapiTextMuted,
-                                )
-                            }
-                        }
+                        BigBtn(
+                            icon = Icons.Filled.Description,
+                            label = plantilla.titulo,
+                            sub = plantilla.descripcion,
+                            section = Sections.Documents,
+                            onClick = { viewModel.onPlantillaSelected(plantilla) },
+                        )
                     }
                 }
             }
         }
+    }
+
+        MicPad(
+            listening = listening,
+            onDoubleTap = viewModel::onMicDoubleTap,
+            hint = if (listening) "Escuchando…" else if (enPregunta) "Toca aquí para responder" else "Toca aquí para hablar",
+            onClick = {
+                val granted = ContextCompat.checkSelfPermission(
+                    context, Manifest.permission.RECORD_AUDIO,
+                ) == PackageManager.PERMISSION_GRANTED
+                if (granted) viewModel.onMicTapped() else permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+            },
+            modifier = Modifier.align(Alignment.BottomCenter),
+        )
     }
 }

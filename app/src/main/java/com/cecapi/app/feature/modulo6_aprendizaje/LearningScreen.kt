@@ -17,15 +17,15 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.pager.HorizontalPager
-import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Hearing
 import androidx.compose.material.icons.filled.Replay
 import androidx.compose.material.icons.filled.SkipNext
+import androidx.compose.material.icons.filled.SportsEsports
+import androidx.compose.material.icons.filled.Vibration
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -33,7 +33,9 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -54,17 +56,19 @@ import com.cecapi.app.core.theme.CecapiSuccess
 import com.cecapi.app.core.theme.CecapiSurface
 import com.cecapi.app.core.theme.CecapiSurfaceElevated
 import com.cecapi.app.core.theme.CecapiTextMuted
+import com.cecapi.app.core.theme.Sections
+import com.cecapi.app.core.ui.BigBtn
+import com.cecapi.app.core.ui.MicPad
 import com.cecapi.app.core.ui.ScreenTopBar
 import com.cecapi.app.core.ui.TopAction
-import com.cecapi.app.core.ui.VoiceCaptionBubble
-import com.cecapi.app.core.ui.VoiceMicButton
 import com.cecapi.app.core.ui.voiceHint
 import com.cecapi.app.core.voice.VoiceState
 
 /**
- * One full-screen card per activity type (sonidos, vibración), swiped between like a carousel. The dots
- * below the title are also tappable for someone who does not want to swipe, and the two work the same as
- * before by voice ("sonidos", "vibración") — swiping is one more way in, not the only way.
+ * Primero un menú para elegir qué actividad hacer — nada de caer directo en sonidos y tener que
+ * adivinar que se puede deslizar, que ni el comando de voz distinguía bien. Elegido un modo (toque
+ * o diciendo su nombre), se abre su pantalla completa; "Atrás" ahí regresa a este menú, no sale de
+ * Actividades de un salto.
  */
 @Composable
 fun LearningScreen(
@@ -89,110 +93,90 @@ fun LearningScreen(
         ActivityResultContracts.RequestPermission(),
     ) { granted -> if (granted) viewModel.onMicTapped() }
 
-    val modes = ActivityMode.entries
-    // Una tarjeta más al final que no es un ejercicio calificado, solo ideas para divertirse —
-    // no tiene ActivityMode propio, así que las sincronizaciones de abajo la dejan en paz.
-    val totalPaginas = modes.size + 1
-    val pagerState = rememberPagerState(initialPage = state.mode.ordinal) { totalPaginas }
-
-    // A voice command ("vibración"...) changes state.mode: follow it with the pager, unless the person is
-    // the one mid-swipe right now (otherwise a swipe in progress would get yanked back).
+    // null = en el menú. Si dicen "vibración" mientras están en el menú (o en otra tarjeta), la
+    // pantalla sigue a la voz igual que antes — solo que ahora parte de un menú, no de un swipe.
+    var seleccion by remember { mutableStateOf<ActivityMode?>(null) }
     LaunchedEffect(state.mode) {
-        val target = state.mode.ordinal
-        if (pagerState.currentPage != target && !pagerState.isScrollInProgress) {
-            pagerState.animateScrollToPage(target)
-        }
+        if (seleccion != null && seleccion != state.mode) seleccion = state.mode
     }
-    // A finished swipe (or a tap on a dot) changes the mode, the same as the old buttons did — salvo en la
-    // última tarjeta (recreativas), que no corresponde a ningún ActivityMode.
-    LaunchedEffect(pagerState) {
-        snapshotFlow { pagerState.settledPage }.collect { page ->
-            val swiped = modes.getOrNull(page) ?: return@collect
-            if (swiped != state.mode) viewModel.setMode(swiped)
-        }
-    }
+    var recreativas by remember { mutableStateOf(false) }
+    val listening = voiceState is VoiceState.Listening
 
+    // El micrófono grande va fijo en las tres pantallas de Actividades (menú, un modo, o
+    // recreativas) — el mismo control, en el mismo lugar, sea cual sea la pestaña.
+    Box(modifier = Modifier.fillMaxSize()) {
     Column(
-        modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 16.dp),
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 16.dp, vertical = 16.dp)
+            .padding(bottom = 230.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        ScreenTopBar(
-            eyebrow = "MENÚ",
-            title = "Actividades",
-            onBack = onBack,
-            onCommands = viewModel::onCommandsRequested,
-        )
-
-        PageDots(
-            count = totalPaginas,
-            current = pagerState.currentPage,
-            labels = listOf("Sonidos", "Vibración", "Recreativas"),
-            onSelect = { page ->
-                modes.getOrNull(page)?.let { viewModel.setMode(it) }
-                    ?: run { /* "Recreativas": solo se desliza, no hay modo que cambiar */ }
-            },
-        )
-
-        HorizontalPager(
-            state = pagerState,
-            modifier = Modifier
-                .fillMaxSize()
-                .weight(1f)
-                .semantics {
-                    contentDescription = "Tarjetas de actividades. Desliza para cambiar entre sonidos, " +
-                        "vibración y actividades recreativas."
-                },
-        ) { page ->
-            val modo = modes.getOrNull(page)
-            if (modo != null) {
+        when {
+            recreativas -> {
+                ScreenTopBar(
+                    eyebrow = "ACTIVIDADES",
+                    title = "Recreativas",
+                    onBack = { recreativas = false },
+                    onCommands = viewModel::onCommandsRequested,
+                )
+                RecreationalPage()
+            }
+            seleccion != null -> {
+                ScreenTopBar(
+                    eyebrow = "ACTIVIDADES",
+                    title = if (seleccion == ActivityMode.AUDIO) "Sonidos" else "Vibración",
+                    onBack = { seleccion = null },
+                    onCommands = viewModel::onCommandsRequested,
+                )
                 ActivityPage(
-                    pageMode = modo,
+                    pageMode = seleccion!!,
                     state = state,
-                    voiceState = voiceState,
-                    onMicTapped = {
-                        val granted = ContextCompat.checkSelfPermission(
-                            context, Manifest.permission.RECORD_AUDIO,
-                        ) == PackageManager.PERMISSION_GRANTED
-                        if (granted) viewModel.onMicTapped() else permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-                    },
-                    onMicDoubleTap = viewModel::onMicDoubleTap,
                     onRepeat = viewModel::repeat,
                     onNext = viewModel::next,
                     onSetLevel = viewModel::setLevel,
                 )
-            } else {
-                RecreationalPage()
+            }
+            else -> {
+                ScreenTopBar(
+                    eyebrow = "MENÚ",
+                    title = "Actividades",
+                    onBack = onBack,
+                    onCommands = viewModel::onCommandsRequested,
+                )
+                BigBtn(
+                    icon = Icons.Filled.Hearing,
+                    label = "Sonidos",
+                    section = Sections.Activities,
+                    onClick = { viewModel.setMode(ActivityMode.AUDIO); seleccion = ActivityMode.AUDIO },
+                )
+                BigBtn(
+                    icon = Icons.Filled.Vibration,
+                    label = "Vibración",
+                    section = Sections.Activities,
+                    onClick = { viewModel.setMode(ActivityMode.VIBRATION); seleccion = ActivityMode.VIBRATION },
+                )
+                BigBtn(
+                    icon = Icons.Filled.SportsEsports,
+                    label = "Recreativas",
+                    section = Sections.Activities,
+                    onClick = { recreativas = true },
+                )
             }
         }
     }
-}
 
-/** The dots under the title: show which of the two cards is showing, and jump straight to one by touch. */
-@Composable
-private fun PageDots(count: Int, current: Int, labels: List<String>, onSelect: (Int) -> Unit) {
-    Row(
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Polite },
-    ) {
-        repeat(count) { i ->
-            val selected = i == current
-            val label = labels.getOrNull(i) ?: "Tarjeta ${i + 1}"
-            Box(
-                modifier = Modifier
-                    .size(if (selected) 14.dp else 10.dp)
-                    .clip(CircleShape)
-                    .background(if (selected) CecapiAccent else CecapiTextMuted.copy(alpha = 0.4f))
-                    .clickable { onSelect(i) }
-                    .semantics { contentDescription = if (selected) "$label, mostrando" else label }
-                    .voiceHint("$label. Toca para mostrar esta tarjeta."),
-            )
-        }
-        Text(
-            labels.getOrNull(current) ?: "",
-            style = MaterialTheme.typography.labelLarge,
-            color = CecapiTextMuted,
-            modifier = Modifier.padding(start = 4.dp),
+        MicPad(
+            listening = listening,
+            onDoubleTap = viewModel::onMicDoubleTap,
+            hint = if (listening) "Escuchando…" else "Di sonidos o vibración, o toca aquí",
+            onClick = {
+                val granted = ContextCompat.checkSelfPermission(
+                    context, Manifest.permission.RECORD_AUDIO,
+                ) == PackageManager.PERMISSION_GRANTED
+                if (granted) viewModel.onMicTapped() else permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+            },
+            modifier = Modifier.align(Alignment.BottomCenter),
         )
     }
 }
@@ -207,9 +191,6 @@ private fun PageDots(count: Int, current: Int, labels: List<String>, onSelect: (
 private fun ActivityPage(
     pageMode: ActivityMode,
     state: ActivitiesUiState,
-    voiceState: VoiceState,
-    onMicTapped: () -> Unit,
-    onMicDoubleTap: () -> Unit,
     onRepeat: () -> Unit,
     onNext: () -> Unit,
     onSetLevel: (Int) -> Unit,
@@ -273,14 +254,6 @@ private fun ActivityPage(
             Text(item.title, style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.onBackground)
         }
 
-        VoiceCaptionBubble(
-            text = when {
-                state.busy -> "Escucha con atención…"
-                state.feedback != null -> state.feedback ?: ""
-                else -> (voiceState as? VoiceState.Speaking)?.text ?: item.instruction
-            },
-        )
-
         state.correct?.let { correct ->
             Text(
                 if (correct) "Correcto" else "Incorrecto",
@@ -300,11 +273,6 @@ private fun ActivityPage(
                 label = "Repetir",
                 help = "Repetir. Vuelve a reproducir el sonido o la vibración. También puedes decir: repite.",
                 onClick = onRepeat,
-            )
-            VoiceMicButton(
-                isListening = voiceState is VoiceState.Listening,
-                onDoubleTap = onMicDoubleTap,
-                onClick = onMicTapped,
             )
             TopAction(
                 icon = Icons.Filled.SkipNext,
@@ -346,23 +314,32 @@ private fun RecreationalPage() {
     }
 }
 
+/**
+ * Solo el título se ve a simple vista — el párrafo completo nadie lo lee en una tarjeta. La
+ * descripción sigue completa por voz: mantén presionado para escucharla.
+ */
 @Composable
 private fun ActividadRecreativaCard(actividad: ActividadRecreativa) {
     val shape = RoundedCornerShape(18.dp)
-    Column(
+    Row(
         modifier = Modifier
             .fillMaxWidth()
             .clip(shape)
             .background(CecapiSurface)
             .voiceHint("${actividad.titulo}. ${actividad.descripcion}")
             .padding(16.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(actividad.titulo, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onBackground)
         Text(
-            actividad.descripcion,
-            style = MaterialTheme.typography.bodyMedium,
+            actividad.titulo,
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onBackground,
+            modifier = Modifier.weight(1f),
+        )
+        Text(
+            "Mantén presionado para escuchar",
+            style = MaterialTheme.typography.labelSmall,
             color = CecapiTextMuted,
-            modifier = Modifier.padding(top = 4.dp),
         )
     }
 }

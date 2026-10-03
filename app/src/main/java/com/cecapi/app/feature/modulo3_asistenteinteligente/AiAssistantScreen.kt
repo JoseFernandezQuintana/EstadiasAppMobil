@@ -24,12 +24,14 @@ import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.cecapi.app.core.theme.CecapiEyebrowStyle
 import com.cecapi.app.core.theme.CecapiTextMuted
+import com.cecapi.app.core.ui.MicPad
+import com.cecapi.app.core.ui.ScreenTopBar
 import com.cecapi.app.core.ui.VoiceCaptionBubble
-import com.cecapi.app.core.ui.VoiceMicButton
 import com.cecapi.app.core.voice.VoiceState
 
 @Composable
 fun AiAssistantScreen(
+    onBack: () -> Unit,
     viewModel: AiAssistantViewModel = hiltViewModel(),
 ) {
     val context = LocalContext.current
@@ -41,12 +43,15 @@ fun AiAssistantScreen(
         ActivityResultContracts.RequestPermission(),
     ) { granted -> if (granted) viewModel.onMicTapped() }
 
-    Column(modifier = Modifier.fillMaxSize().padding(24.dp)) {
-        Text("ASISTENTE INTELIGENTE", style = CecapiEyebrowStyle, color = CecapiTextMuted)
-        Text(
-            "Preguntas, dudas y apoyo",
-            style = MaterialTheme.typography.headlineMedium,
-            color = MaterialTheme.colorScheme.onBackground,
+    val listening = voiceState is VoiceState.Listening
+
+    Box(modifier = Modifier.fillMaxSize()) {
+    Column(modifier = Modifier.fillMaxSize().padding(24.dp).padding(bottom = 230.dp)) {
+        ScreenTopBar(
+            eyebrow = "ASISTENTE INTELIGENTE",
+            title = "Preguntas y apoyo",
+            onBack = onBack,
+            onCommands = { viewModel.onMicTapped() },
         )
         if (!isOnline) {
             Text(
@@ -57,20 +62,9 @@ fun AiAssistantScreen(
             )
         }
 
-        Box(modifier = Modifier.fillMaxWidth().padding(vertical = 32.dp), contentAlignment = Alignment.Center) {
-            VoiceMicButton(
-                isListening = voiceState is VoiceState.Listening,
-                onClick = {
-                    val granted = ContextCompat.checkSelfPermission(
-                        context, Manifest.permission.RECORD_AUDIO,
-                    ) == PackageManager.PERMISSION_GRANTED
-                    if (granted) viewModel.onMicTapped() else permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-                },
-            )
-        }
-
         VoiceCaptionBubble(
             text = (voiceState as? VoiceState.Speaking)?.text ?: "Toca el micrófono y hazme una pregunta.",
+            modifier = Modifier.padding(top = 16.dp),
         )
 
         Text(
@@ -89,5 +83,19 @@ fun AiAssistantScreen(
                 )
             }
         }
+    }
+
+        MicPad(
+            listening = listening,
+            onDoubleTap = viewModel::onMicDoubleTap,
+            hint = if (listening) "Escuchando…" else "Toca aquí y hazme una pregunta",
+            onClick = {
+                val granted = ContextCompat.checkSelfPermission(
+                    context, Manifest.permission.RECORD_AUDIO,
+                ) == PackageManager.PERMISSION_GRANTED
+                if (granted) viewModel.onMicTapped() else permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+            },
+            modifier = Modifier.align(Alignment.BottomCenter),
+        )
     }
 }

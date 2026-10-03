@@ -92,3 +92,17 @@ val MIGRATION_6_7 = object : Migration(6, 7) {
         db.execSQL("ALTER TABLE usuarios ADD COLUMN validado INTEGER NOT NULL DEFAULT 1")
     }
 }
+
+/** v8: en Clasificación, por default se muestra el nombre; la persona puede elegir mostrar su apodo. */
+val MIGRATION_7_8 = object : Migration(7, 8) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE usuarios ADD COLUMN usar_apodo_ranking INTEGER NOT NULL DEFAULT 0")
+    }
+}
+
+/** v9: fecha de nacimiento, para saber si la cuenta es de un menor de edad. Nula en cuentas que ya existían. */
+val MIGRATION_8_9 = object : Migration(8, 9) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE usuarios ADD COLUMN fecha_nacimiento INTEGER")
+    }
+}

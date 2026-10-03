@@ -4,13 +4,16 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.cecapi.app.core.voice.FeedbackCues
 import com.cecapi.app.core.voice.VoiceEngine
+import com.cecapi.app.core.voice.VoiceState
 import com.cecapi.app.core.voice.VoiceText
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -40,6 +43,10 @@ class SoporteViewModel @Inject constructor(
 
     private val _uiState = MutableStateFlow(SoporteUiState())
     val uiState: StateFlow<SoporteUiState> = _uiState.asStateFlow()
+
+    val voiceState: StateFlow<VoiceState> = voiceEngine.state.stateIn(
+        viewModelScope, SharingStarted.WhileSubscribed(5_000), VoiceState.Idle,
+    )
 
     private val _back = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     val back: SharedFlow<Unit> = _back
@@ -141,6 +148,11 @@ class SoporteViewModel @Inject constructor(
         }
         voiceEngine.speak(texto, listenAfter = true)
     }
+
+    fun onMicTapped() = voiceEngine.startListening()
+
+    /** Two quick taps on the mic silence the assistant, for someone using touch instead of voice. */
+    fun onMicDoubleTap() = voiceEngine.mute()
 
     override fun onCleared() {
         voiceEngine.rawInput = false

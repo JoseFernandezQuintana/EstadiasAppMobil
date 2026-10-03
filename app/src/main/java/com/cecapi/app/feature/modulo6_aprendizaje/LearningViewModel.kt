@@ -86,6 +86,11 @@ class LearningViewModel @Inject constructor(
     private val level = MutableStateFlow(1)
     private var exerciseJob: Job? = null
 
+    // Los ejercicios se cargan en silencio desde que se abre la pantalla, pero no se narran ni
+    // empiezan a sonar hasta que la persona elige sonidos o vibración — antes, el micrófono y la
+    // narración arrancaban solos aunque la pantalla mostrara el menú de selección.
+    private val started = MutableStateFlow(false)
+
     // The highest level the person has reached (saved progress), to announce when it goes up.
     private var savedLevel = 1
 
@@ -112,8 +117,8 @@ class LearningViewModel @Inject constructor(
             }
             _state.value = _state.value.copy(level = level.value)
             voiceEngine.speak(
-                "Actividades para entrenar el oído. Escucharás un sonido y dirás de dónde viene. " +
-                    "Di vibración para practicar con vibraciones. " + CommandCatalog.hint("actividades"),
+                "Actividades. Di sonidos, para entrenar el oído, o vibración, para practicar con " +
+                    "vibraciones. " + CommandCatalog.hint("actividades"),
             )
             itemsFlow.collect { list -> onItemsLoaded(list) }
         }
@@ -134,8 +139,12 @@ class LearningViewModel @Inject constructor(
             correct = null,
             answeredIndex = -1,
         )
-        if (list.isEmpty()) return
-        // Let the welcome finish before the first exercise.
+        if (list.isEmpty() || !started.value) return
+        announceAndStart()
+    }
+
+    /** Let the welcome (or the menu) finish before the first exercise starts talking. */
+    private suspend fun announceAndStart() {
         speakAndWait("")
         startExercise(intro = "${where()} ")
     }
@@ -186,7 +195,16 @@ class LearningViewModel @Inject constructor(
     }
 
     fun setMode(newMode: ActivityMode) {
-        if (newMode == mode.value) return
+        val yaEmpezado = started.value
+        started.value = true
+        if (newMode == mode.value) {
+            // Mismo modo que ya estaba cargado en silencio: si es la primera vez que se elige
+            // (desde el menú), hay que narrarlo ahora; si no, ya se estaba narrando.
+            if (!yaEmpezado && _state.value.items.isNotEmpty()) {
+                viewModelScope.launch { announceAndStart() }
+            }
+            return
+        }
         stopStimulus()
         mode.value = newMode
     }

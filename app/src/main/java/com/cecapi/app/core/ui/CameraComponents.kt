@@ -13,11 +13,13 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
@@ -51,12 +53,16 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import com.cecapi.app.core.theme.CecapiAccent
 import com.cecapi.app.core.theme.CecapiBackground
+import com.cecapi.app.core.theme.CecapiBorder
 import com.cecapi.app.core.theme.CecapiEyebrowStyle
+import com.cecapi.app.core.theme.CecapiSurface
 import com.cecapi.app.core.theme.CecapiSurfaceElevated
 import com.cecapi.app.core.theme.CecapiTextMuted
 import com.cecapi.app.core.theme.CecapiTextPrimary
@@ -171,7 +177,13 @@ fun FramingGuide(modifier: Modifier = Modifier, color: Color = CecapiAccent) {
     }
 }
 
-/** Header over the camera: back, what this screen is, and a button that reads out its commands. */
+/**
+ * Header de cada pantalla: etiqueta, botón "Volver" y título, como tres elementos sueltos, sin
+ * ninguna caja grande envolviéndolos juntos. "Volver" es un botón normal (una pastilla con su
+ * propio fondo, como cualquier botón), no una tarjeta especial ni algo metido dentro de un marco.
+ * Tampoco lleva un botón de comandos aparte: eso se pide por voz, como recuerda el pie del
+ * micrófono (MicPad).
+ */
 @Composable
 fun ScreenTopBar(
     eyebrow: String,
@@ -180,38 +192,33 @@ fun ScreenTopBar(
     onCommands: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(24.dp))
-            .background(CecapiBackground.copy(alpha = 0.82f))
-            .padding(8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
+    Column(modifier = modifier.fillMaxWidth()) {
+        Text(eyebrow, style = CecapiEyebrowStyle, color = CecapiTextMuted)
         val backHelp = "Volver. Regresa a la pantalla anterior."
-        IconButton(
-            onClick = onBack,
+        Row(
             modifier = Modifier
-                .size(56.dp)
+                .fillMaxWidth()
+                .padding(top = 8.dp)
+                .heightIn(min = 58.dp)
+                .clip(RoundedCornerShape(16.dp))
+                .background(CecapiSurfaceElevated)
+                .border(1.dp, CecapiBorder, RoundedCornerShape(16.dp))
+                .clickable(onClick = onBack)
                 .semantics { contentDescription = backHelp }
-                .voiceHint(backHelp),
+                .voiceHint(backHelp)
+                .padding(horizontal = 18.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null, tint = CecapiTextPrimary)
+            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null, tint = CecapiTextPrimary, modifier = Modifier.size(26.dp))
+            Text("Volver", style = MaterialTheme.typography.titleMedium, color = CecapiTextPrimary)
         }
-        Column(modifier = Modifier.weight(1f).padding(horizontal = 8.dp)) {
-            Text(eyebrow, style = CecapiEyebrowStyle, color = CecapiTextMuted)
-            Text(title, style = MaterialTheme.typography.titleLarge, color = CecapiTextPrimary)
-        }
-        val commandsHelp = "Comandos. Toca para escuchar todo lo que puedes decir en esta pantalla."
-        IconButton(
-            onClick = onCommands,
-            modifier = Modifier
-                .size(56.dp)
-                .semantics { contentDescription = commandsHelp }
-                .voiceHint(commandsHelp),
-        ) {
-            Icon(Icons.Filled.Info, contentDescription = null, tint = CecapiAccent)
-        }
+        Text(
+            title,
+            style = MaterialTheme.typography.titleLarge,
+            color = CecapiTextPrimary,
+            modifier = Modifier.padding(top = 8.dp),
+        )
     }
 }
 

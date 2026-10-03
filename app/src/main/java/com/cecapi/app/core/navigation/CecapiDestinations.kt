@@ -28,4 +28,7 @@ object CecapiDestinations {
 
     /** Individual and institution standings in Actividades. Open to anyone signed in, every role. */
     const val RANKING = "ranking"
+
+    /** Each person's own: name, apodo, whether Clasificación shows one or the other, and password. */
+    const val EDIT_ACCOUNT = "edit_account"
 }

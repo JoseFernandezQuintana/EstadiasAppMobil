@@ -21,15 +21,13 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -47,9 +45,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
@@ -63,7 +61,12 @@ import com.cecapi.app.core.theme.CecapiError
 import com.cecapi.app.core.theme.CecapiEyebrowStyle
 import com.cecapi.app.core.theme.CecapiSurface
 import com.cecapi.app.core.theme.CecapiTextMuted
+import com.cecapi.app.core.ui.BigBtn
+import com.cecapi.app.core.ui.BigBtnVariant
+import com.cecapi.app.core.ui.MicPad
+import com.cecapi.app.core.ui.ScreenTopBar
 import com.cecapi.app.core.ui.voiceHint
+import com.cecapi.app.core.voice.VoiceState
 
 @Composable
 fun LoginScreen(
@@ -117,59 +120,25 @@ fun LoginScreen(
         onDispose { viewModel.setWakeWordEnabled(false) }
     }
 
+    val voiceState by viewModel.voiceState.collectAsState()
+    val listening = voiceState is VoiceState.Listening
+
+    // El micrófono grande y fijo abajo es siempre el mismo control, en el mismo lugar, en toda la
+    // app — para alguien invidente eso importa más que el espacio que ocupa.
+    Box(modifier = Modifier.fillMaxSize()) {
     Column(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 24.dp, vertical = 32.dp),
+            .padding(horizontal = 24.dp, vertical = 16.dp)
+            .padding(bottom = 250.dp),
     ) {
-        // Visible way back for someone navigating by touch, not only by voice ("atrás").
-        val backHelp = "Volver. Regresa a la pantalla anterior."
-        IconButton(
-            onClick = onBack,
-            modifier = Modifier
-                .size(48.dp)
-                .semantics { contentDescription = backHelp }
-                .voiceHint(backHelp),
-        ) {
-            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null, tint = CecapiAccent)
-        }
-
-        Text(
-            text = "Di \"usuario\" o \"contraseña\" para dictar cada dato, o escríbelos abajo",
-            style = MaterialTheme.typography.bodyLarge,
-            color = CecapiTextMuted,
+        ScreenTopBar(
+            eyebrow = "CUENTA",
+            title = "Iniciar sesión",
+            onBack = onBack,
+            onCommands = viewModel::onCommandsRequested,
         )
-
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 16.dp)
-                .clip(RoundedCornerShape(16.dp))
-                .background(CecapiSurface)
-                .clickable {
-                    val granted = ContextCompat.checkSelfPermission(
-                        context, Manifest.permission.RECORD_AUDIO,
-                    ) == PackageManager.PERMISSION_GRANTED
-                    if (granted) viewModel.onMicTapped() else permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-                }
-                .semantics { contentDescription = "Micrófono. Toca dos veces para hablar." }
-                .voiceHint(
-                    "Micrófono. Tócalo para dictar. Di usuario y luego tu usuario, " +
-                        "o di contraseña y luego tu contraseña.",
-                )
-                .padding(16.dp),
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Filled.Mic, contentDescription = null, tint = CecapiAccent, modifier = Modifier.size(32.dp))
-                Text(
-                    text = "Toca aquí para hablar",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = CecapiAccent,
-                    modifier = Modifier.padding(start = 12.dp),
-                )
-            }
-        }
 
         Text(
             text = "USUARIO",
@@ -182,14 +151,15 @@ fun LoginScreen(
             onValueChange = viewModel::onUsernameChange,
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(min = 64.dp)
+                .heightIn(min = 72.dp)
                 .voiceHint(
                     help = "Campo de usuario. Aquí va el nombre con el que te registraron. " +
                         "Puedes escribirlo o dictarlo. Se escribe en mayúsculas automáticamente.",
                     focusLabel = "Campo de usuario. Escribe tu nombre de usuario.",
                 ),
-            placeholder = { Text("Tu nombre de usuario") },
-            leadingIcon = { Icon(Icons.Filled.Person, contentDescription = null) },
+            textStyle = MaterialTheme.typography.titleLarge,
+            placeholder = { Text("Tu nombre de usuario", style = MaterialTheme.typography.titleMedium) },
+            leadingIcon = { Icon(Icons.Filled.Person, contentDescription = null, modifier = Modifier.size(28.dp)) },
             singleLine = true,
             // No autocorrect: the keyboard may swap the typed word for another when focus moves on.
             keyboardOptions = KeyboardOptions(
@@ -198,6 +168,7 @@ fun LoginScreen(
                 autoCorrectEnabled = false,
                 imeAction = ImeAction.Next,
             ),
+            shape = RoundedCornerShape(16.dp),
             colors = OutlinedTextFieldDefaults.colors(
                 focusedBorderColor = CecapiAccent,
                 unfocusedBorderColor = CecapiTextMuted,
@@ -208,37 +179,39 @@ fun LoginScreen(
             text = "CONTRASEÑA",
             style = CecapiEyebrowStyle,
             color = CecapiTextMuted,
-            modifier = Modifier.padding(top = 20.dp, bottom = 8.dp),
+            modifier = Modifier.padding(top = 24.dp, bottom = 8.dp),
         )
         OutlinedTextField(
             value = uiState.password,
-            onValueChange = viewModel::onPasswordChange,
+            onValueChange = { viewModel.onPasswordChange(it.filter(Char::isDigit)) },
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(min = 64.dp)
+                .heightIn(min = 72.dp)
                 .voiceHint(
-                    help = "Campo de contraseña. Aquí va tu clave secreta. Se ve oculta por seguridad. " +
+                    help = "Campo de contraseña. Son números. Se ve oculta por seguridad. " +
                         "Puedes escribirla o dictarla, y nunca la leo en voz alta.",
                     focusLabel = "Campo de contraseña. Escribe tu contraseña.",
                 ),
-            placeholder = { Text("Tu contraseña") },
-            leadingIcon = { Icon(Icons.Filled.Lock, contentDescription = null) },
+            textStyle = MaterialTheme.typography.titleLarge,
+            placeholder = { Text("Tu contraseña", style = MaterialTheme.typography.titleMedium) },
+            leadingIcon = { Icon(Icons.Filled.Lock, contentDescription = null, modifier = Modifier.size(28.dp)) },
             trailingIcon = {
                 IconButton(onClick = { passwordVisible = !passwordVisible }) {
                     Icon(
                         imageVector = if (passwordVisible) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
                         contentDescription = if (passwordVisible) "Ocultar contraseña" else "Mostrar contraseña",
+                        modifier = Modifier.size(28.dp),
                     )
                 }
             },
             singleLine = true,
             visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
             keyboardOptions = KeyboardOptions(
-                keyboardType = KeyboardType.Password,
-                autoCorrectEnabled = false,
+                keyboardType = KeyboardType.NumberPassword,
                 imeAction = ImeAction.Done,
             ),
             keyboardActions = KeyboardActions(onDone = { viewModel.submit() }),
+            shape = RoundedCornerShape(16.dp),
             colors = OutlinedTextFieldDefaults.colors(
                 focusedBorderColor = CecapiAccent,
                 unfocusedBorderColor = CecapiTextMuted,
@@ -254,50 +227,33 @@ fun LoginScreen(
             )
         }
 
-        Button(
-            onClick = viewModel::submit,
+        BigBtn(
+            icon = Icons.Filled.Check,
+            label = if (uiState.isSubmitting) "Entrando…" else "Ingresar",
+            variant = BigBtnVariant.Accent,
             enabled = !uiState.isSubmitting,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 24.dp)
-                .heightIn(min = 56.dp)
-                .clip(RoundedCornerShape(50))
-                .voiceHint("Ingresar al sistema. Verifica tu usuario y contraseña y abre tu cuenta."),
-            colors = ButtonDefaults.buttonColors(containerColor = CecapiAccent),
-        ) {
-            if (uiState.isSubmitting) {
-                CircularProgressIndicator(modifier = Modifier.size(20.dp), color = MaterialTheme.colorScheme.onPrimary)
-            } else {
-                Text("Ingresar al sistema", color = MaterialTheme.colorScheme.onPrimary)
-            }
-        }
+            onClick = viewModel::submit,
+            modifier = Modifier.padding(top = 24.dp),
+        )
+        BigBtn(
+            icon = Icons.Filled.PersonAdd,
+            label = "Crear cuenta",
+            onClick = onNavigateToRegister,
+            modifier = Modifier.padding(top = 14.dp),
+        )
+    }
 
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
-            horizontalArrangement = Arrangement.Center,
-        ) {
-            Text(
-                text = "Demo: usuario CECAPI · contraseña 1234",
-                style = MaterialTheme.typography.bodyMedium,
-                color = CecapiTextMuted,
-            )
-        }
-
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 8.dp)
-                .heightIn(min = 48.dp)
-                .clickable(onClick = onNavigateToRegister)
-                .voiceHint("Crear una cuenta. Abre el registro para hacer tu usuario y tu contraseña."),
-            horizontalArrangement = Arrangement.Center,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = "¿No tienes cuenta? Crear una",
-                style = MaterialTheme.typography.bodyMedium,
-                color = CecapiAccent,
-            )
-        }
+        MicPad(
+            listening = listening,
+            onDoubleTap = viewModel::onMicDoubleTap,
+            hint = if (listening) "Escuchando…" else "Di usuario o contraseña, o toca aquí",
+            onClick = {
+                val granted = ContextCompat.checkSelfPermission(
+                    context, Manifest.permission.RECORD_AUDIO,
+                ) == PackageManager.PERMISSION_GRANTED
+                if (granted) viewModel.onMicTapped() else permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+            },
+            modifier = Modifier.align(Alignment.BottomCenter),
+        )
     }
 }

@@ -37,6 +37,7 @@ import javax.inject.Inject
 
 sealed interface HomeNavEvent {
     data object GoToLogin : HomeNavEvent
+    data object GoToRegister : HomeNavEvent
     data object GoToSettings : HomeNavEvent
     data object ExitApp : HomeNavEvent
     data class GoToModule(val route: String) : HomeNavEvent
@@ -139,6 +140,12 @@ class HomeViewModel @Inject constructor(
         cues.play(FeedbackCues.Cue.NAVIGATE)
         voiceEngine.speak("Abriendo la configuración.")
         _navEvents.tryEmit(HomeNavEvent.GoToSettings)
+    }
+
+    fun onCrearCuentaSelected() {
+        cues.play(FeedbackCues.Cue.NAVIGATE)
+        voiceEngine.speak("Abriendo crear cuenta.")
+        _navEvents.tryEmit(HomeNavEvent.GoToRegister)
     }
 
     /** A card of the main menu was tapped (or named out loud). */

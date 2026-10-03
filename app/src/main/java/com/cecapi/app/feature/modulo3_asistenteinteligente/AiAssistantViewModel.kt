@@ -47,6 +47,9 @@ class AiAssistantViewModel @Inject constructor(
         voiceEngine.startListening()
     }
 
+    /** Two quick taps on the mic silence the assistant, for someone using touch instead of voice. */
+    fun onMicDoubleTap() = voiceEngine.mute()
+
     fun onQuestionAsked(pregunta: String) {
         val usuario = sessionRepository.currentUser.value ?: run {
             // Nobody signed in: say so instead of ignoring the user in silence.

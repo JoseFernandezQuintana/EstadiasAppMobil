@@ -27,6 +27,8 @@ data class GestionUiState(
     val personas: List<UsuarioEntity> = emptyList(),
     /** La fila que está desplegada mostrando sus acciones; null = ninguna. */
     val expandidoId: Long? = null,
+    /** Solo administrador (todas) y directivo (las de su institución); vacío para los demás roles. */
+    val incidencias: List<IncidenciaEntity> = emptyList(),
 )
 
 /**
@@ -39,6 +41,7 @@ class GestionViewModel @Inject constructor(
     private val voiceEngine: VoiceEngine,
     private val sessionRepository: SessionRepository,
     private val usuarioDao: UsuarioDao,
+    private val incidenciaDao: IncidenciaDao,
     private val cues: FeedbackCues,
 ) : ViewModel() {
 
@@ -60,15 +63,27 @@ class GestionViewModel @Inject constructor(
             }
         }
 
+    private val incidenciasFlow = sessionRepository.currentUser
+        .filterNotNull()
+        .flatMapLatest { usuario ->
+            when (RolUsuario.fromCodigo(usuario.rol)) {
+                RolUsuario.ADMINISTRADOR -> incidenciaDao.observeTodas()
+                RolUsuario.DIRECTIVO -> incidenciaDao.observeDeInstitucion(usuario.origen)
+                else -> flowOf(emptyList())
+            }
+        }
+
     val uiState: StateFlow<GestionUiState> = combine(
         sessionRepository.currentUser.filterNotNull(),
         personasFlow,
         _expandidoId,
-    ) { usuario, personas, expandidoId ->
+        incidenciasFlow,
+    ) { usuario, personas, expandidoId, incidencias ->
         GestionUiState(
             rolObservador = RolUsuario.fromCodigo(usuario.rol),
             personas = personas,
             expandidoId = expandidoId,
+            incidencias = incidencias,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), GestionUiState())
 
@@ -107,13 +122,19 @@ class GestionViewModel @Inject constructor(
         voiceEngine.speak(CommandCatalog.GESTION, listenAfter = true)
     }
 
+    fun onMicTapped() = voiceEngine.startListening()
+
+    /** Two quick taps on the mic silence the assistant, for someone using touch instead of voice. */
+    fun onMicDoubleTap() = voiceEngine.mute()
+
     /** True solo para administrador y directivo: un educador ve su lista pero no cambia roles. */
     fun puedeEditar(): Boolean =
         uiState.value.rolObservador == RolUsuario.ADMINISTRADOR || uiState.value.rolObservador == RolUsuario.DIRECTIVO
 
     fun onPersonaTocada(persona: UsuarioEntity) {
         val propio = sessionRepository.currentUser.value?.id == persona.id
-        if (propio || !puedeEditar()) return
+        // Un educador no cambia roles, pero igual necesita abrir la tarjeta para validar a su alumno.
+        if (propio || (!puedeEditar() && !puedeValidar(persona))) return
         _expandidoId.value = if (_expandidoId.value == persona.id) null else persona.id
     }
 
@@ -165,6 +186,13 @@ class GestionViewModel @Inject constructor(
             usuarioDao.validar(persona.id)
             cues.play(FeedbackCues.Cue.SUCCESS)
             voiceEngine.speak("Validé a ${persona.nombreCompleto}.")
+        }
+    }
+
+    fun onResolverIncidencia(incidencia: IncidenciaEntity) {
+        viewModelScope.launch {
+            incidenciaDao.marcarResuelta(incidencia.id)
+            cues.play(FeedbackCues.Cue.SUCCESS)
         }
     }
 }

@@ -10,6 +10,7 @@ import com.cecapi.app.feature.modulo4_lectordocumentos.DocumentReaderScreen
 import com.cecapi.app.feature.modulo7_entorno.EnvironmentScreen
 import com.cecapi.app.feature.modulo6_aprendizaje.LearningScreen
 import com.cecapi.app.feature.modulo1_aplicacionprincipal.DashboardScreen
+import com.cecapi.app.feature.modulo1_aplicacionprincipal.EditAccountScreen
 import com.cecapi.app.feature.modulo1_aplicacionprincipal.HomeScreen
 import com.cecapi.app.feature.modulo1_aplicacionprincipal.LoginScreen
 import com.cecapi.app.feature.modulo1_aplicacionprincipal.RegisterScreen
@@ -30,6 +31,7 @@ fun CecapiNavGraph(navController: NavHostController = rememberNavController()) {
         composable(CecapiDestinations.HOME) {
             HomeScreen(
                 onNavigateToLogin = { navController.navigate(CecapiDestinations.LOGIN) },
+                onNavigateToRegister = { navController.navigate(CecapiDestinations.REGISTER) },
                 onNavigateToModule = { route -> navController.navigate(route) },
                 onNavigateToSettings = { navController.navigate(CecapiDestinations.SETTINGS) },
             )
@@ -91,6 +93,9 @@ fun CecapiNavGraph(navController: NavHostController = rememberNavController()) {
         composable(CecapiDestinations.RANKING) {
             WakeScope { RankingScreen(onBack = { navController.popBackStack() }) }
         }
+        composable(CecapiDestinations.EDIT_ACCOUNT) {
+            WakeScope { EditAccountScreen(onBack = { navController.popBackStack() }) }
+        }
         composable(CecapiDestinations.CHATS) {
             WakeScope {
                 ChatsScreen(
@@ -108,10 +113,15 @@ fun CecapiNavGraph(navController: NavHostController = rememberNavController()) {
             }
         }
         composable(CecapiDestinations.VOICE_ASSISTANT) {
-            WakeScope { VoiceAssistantScreen(onNavigateToModule = { route -> navController.navigate(route) }) }
+            WakeScope {
+                VoiceAssistantScreen(
+                    onBack = { navController.popBackStack() },
+                    onNavigateToModule = { route -> navController.navigate(route) },
+                )
+            }
         }
         composable(CecapiDestinations.AI_ASSISTANT) {
-            WakeScope { AiAssistantScreen() }
+            WakeScope { AiAssistantScreen(onBack = { navController.popBackStack() }) }
         }
         composable(CecapiDestinations.DOCUMENT_READER) {
             WakeScope {
