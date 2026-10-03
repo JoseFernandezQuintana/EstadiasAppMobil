@@ -52,6 +52,7 @@ import com.cecapi.app.core.theme.CecapiWarning
 import com.cecapi.app.core.theme.ModuleSection
 import com.cecapi.app.core.theme.Sections
 import com.cecapi.app.core.ui.BigBtn
+import com.cecapi.app.core.ui.BigBtnSize
 import com.cecapi.app.core.ui.BigBtnVariant
 import com.cecapi.app.core.ui.MicPad
 import com.cecapi.app.core.ui.ScreenTopBar
@@ -350,6 +351,7 @@ fun PersonalizationScreen(
                             sub = "Un pitido corto y una vibración",
                             variant = BigBtnVariant.Accent,
                             half = true,
+                            size = BigBtnSize.Compact,
                             onClick = { viewModel.onTestCue(FeedbackCues.Cue.LISTENING, "Te escucho.") },
                             modifier = Modifier.weight(1f),
                         )
@@ -359,6 +361,7 @@ fun PersonalizationScreen(
                             sub = "Dos pulsos, el segundo más largo",
                             variant = BigBtnVariant.Success,
                             half = true,
+                            size = BigBtnSize.Compact,
                             onClick = { viewModel.onTestCue(FeedbackCues.Cue.SUCCESS, "Éxito.") },
                             modifier = Modifier.weight(1f),
                         )
@@ -370,6 +373,7 @@ fun PersonalizationScreen(
                             sub = "Tres vibraciones seguidas",
                             variant = BigBtnVariant.Danger,
                             half = true,
+                            size = BigBtnSize.Compact,
                             onClick = { viewModel.onTestCue(FeedbackCues.Cue.ERROR, "Error.") },
                             modifier = Modifier.weight(1f),
                         )
@@ -379,6 +383,7 @@ fun PersonalizationScreen(
                             sub = "Dos vibraciones largas",
                             section = ModuleSection(CecapiWarning, CecapiWarning.copy(alpha = 0.15f)),
                             half = true,
+                            size = BigBtnSize.Compact,
                             onClick = { viewModel.onTestCue(FeedbackCues.Cue.WARNING, "Atención.") },
                             modifier = Modifier.weight(1f),
                         )
@@ -388,6 +393,7 @@ fun PersonalizationScreen(
                         label = "Notificación",
                         sub = "Tres toques rápidos",
                         variant = BigBtnVariant.Accent,
+                        size = BigBtnSize.Compact,
                         onClick = { viewModel.onTestCue(FeedbackCues.Cue.INCOMING, "Llegó una notificación.") },
                     )
                 }

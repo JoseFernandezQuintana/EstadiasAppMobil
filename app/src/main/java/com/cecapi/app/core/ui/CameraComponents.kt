@@ -194,12 +194,17 @@ fun ScreenTopBar(
 ) {
     Column(modifier = modifier.fillMaxWidth()) {
         Text(eyebrow, style = CecapiEyebrowStyle, color = CecapiTextMuted)
+        Text(
+            title,
+            style = MaterialTheme.typography.titleLarge,
+            color = CecapiTextPrimary,
+            modifier = Modifier.padding(top = 4.dp, bottom = 8.dp),
+        )
         val backHelp = "Volver. Regresa a la pantalla anterior."
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = 8.dp)
-                .heightIn(min = 58.dp)
+                .heightIn(min = 74.dp)
                 .clip(RoundedCornerShape(16.dp))
                 .background(CecapiSurfaceElevated)
                 .border(1.dp, CecapiBorder, RoundedCornerShape(16.dp))
@@ -213,12 +218,6 @@ fun ScreenTopBar(
             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null, tint = CecapiTextPrimary, modifier = Modifier.size(26.dp))
             Text("Volver", style = MaterialTheme.typography.titleMedium, color = CecapiTextPrimary)
         }
-        Text(
-            title,
-            style = MaterialTheme.typography.titleLarge,
-            color = CecapiTextPrimary,
-            modifier = Modifier.padding(top = 8.dp),
-        )
     }
 }
 

@@ -188,13 +188,6 @@ fun DocumentReaderScreen(
                     onClick = onBack,
                 )
                 BigActionCard(
-                    icon = Icons.Filled.AddAPhoto,
-                    label = "TOMAR OTRA FOTO",
-                    tint = ModuleCameraAccent,
-                    help = "Tomar otra foto. Vuelve a la cámara para leer un papel distinto.",
-                    onClick = viewModel::onRetakePhoto,
-                )
-                BigActionCard(
                     icon = if (uiState.estaLeyendo) Icons.Filled.Pause else Icons.Filled.PlayArrow,
                     label = if (uiState.estaLeyendo) "PAUSAR" else "CONTINUAR",
                     tint = CecapiAccent,
@@ -230,6 +223,14 @@ fun DocumentReaderScreen(
                         modifier = Modifier.weight(1f),
                     )
                 }
+                BigActionCard(
+                    icon = Icons.Filled.AddAPhoto,
+                    label = "TOMAR OTRA FOTO",
+                    tint = ModuleCameraAccent,
+                    help = "Tomar otra foto. Vuelve a la cámara para leer un papel distinto.",
+                    onClick = viewModel::onRetakePhoto,
+                    large = true,
+                )
             }
         }
     } else {
@@ -304,7 +305,11 @@ fun DocumentReaderScreen(
     }
 }
 
-/** One full-width, same-size button: a big icon badge plus a big bold label, easy to find and tap. */
+/**
+ * One full-width, same-size button: a big icon badge plus a big bold label, easy to find and tap.
+ * [large] = tamaño 1 (héroe), para la única acción que debe destacar más que el resto de esta
+ * pantalla aunque vaya al final de la lista — hoy solo "Tomar otra foto".
+ */
 @Composable
 private fun BigActionCard(
     icon: ImageVector,
@@ -313,12 +318,13 @@ private fun BigActionCard(
     help: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    large: Boolean = false,
 ) {
     val shape = RoundedCornerShape(20.dp)
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .heightIn(min = 76.dp)
+            .heightIn(min = if (large) 96.dp else 76.dp)
             .clip(shape)
             .background(CecapiSurfaceElevated)
             .border(2.dp, tint, shape)
@@ -332,15 +338,20 @@ private fun BigActionCard(
         val iconShape = RoundedCornerShape(15.dp)
         Box(
             modifier = Modifier
-                .size(52.dp)
+                .size(if (large) 72.dp else 52.dp)
                 .clip(iconShape)
                 .background(tint.copy(alpha = 0.2f))
                 .border(2.dp, tint, iconShape),
             contentAlignment = Alignment.Center,
         ) {
-            Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(30.dp))
+            Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(if (large) 40.dp else 30.dp))
         }
         Spacer(modifier = Modifier.width(14.dp))
-        Text(label, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = CecapiTextPrimary)
+        Text(
+            label,
+            style = if (large) MaterialTheme.typography.headlineSmall else MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            color = CecapiTextPrimary,
+        )
     }
 }

@@ -40,15 +40,18 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.cecapi.app.core.theme.CecapiAccent
 import com.cecapi.app.core.theme.CecapiBackground
+import com.cecapi.app.core.theme.CecapiSuccess
 import com.cecapi.app.core.theme.CecapiSurface
 import com.cecapi.app.core.theme.CecapiSurfaceElevated
 import com.cecapi.app.core.theme.CecapiTextMuted
 import com.cecapi.app.core.theme.Sections
 import com.cecapi.app.core.ui.BigBtn
+import com.cecapi.app.core.ui.BigBtnSize
 import com.cecapi.app.core.ui.BigBtnVariant
 import com.cecapi.app.core.ui.MicPad
 import com.cecapi.app.core.ui.ScreenTopBar
@@ -57,14 +60,18 @@ import com.cecapi.app.core.voice.VoiceState
 
 private enum class RankingSub { MI_RANKING, TOP5 }
 
-/** Oro, morado, naranja para 1°-3°; azul y verde para 4°-5° — un lugar se nota antes de leer el número. */
+/**
+ * Paleta sobria, a juego con el resto de la app (nada tan saturado como el dorado/morado/naranja
+ * neón de antes): oro ya usado en Clasificación para el 1°, lavanda y cobre apagados para 2°-3°,
+ * azul y verde ya usados en la app para 4°-5°. Un lugar se nota antes de leer el número.
+ */
 private data class Podio(val color: Color, val fondo: Color, val icono: ImageVector?)
 private val PODIO = mapOf(
-    1 to Podio(Color(0xFFFFD700), Color(0xFF2E2800), Icons.Filled.EmojiEvents),
-    2 to Podio(Color(0xFFC084FC), Color(0xFF271A3A), Icons.Filled.Star),
-    3 to Podio(Color(0xFFFB923C), Color(0xFF2A1800), Icons.Filled.MilitaryTech),
-    4 to Podio(CecapiAccent, Color(0xFF0B1E2E), null),
-    5 to Podio(Color(0xFF34D399), Color(0xFF082218), null),
+    1 to Podio(Sections.Ranking.color, Sections.Ranking.bg, Icons.Filled.EmojiEvents),
+    2 to Podio(Color(0xFFB9A3E3), Color(0xFF2C2438), Icons.Filled.Star),
+    3 to Podio(Color(0xFFD9A066), Color(0xFF332518), Icons.Filled.MilitaryTech),
+    4 to Podio(CecapiAccent, Color(0xFF102733), null),
+    5 to Podio(CecapiSuccess, Color(0xFF0E2A1B), null),
 )
 
 @Composable
@@ -149,6 +156,7 @@ fun RankingScreen(
                         label = "Semana",
                         variant = BigBtnVariant.Locked,
                         half = true,
+                        size = BigBtnSize.Secondary,
                         onClick = {},
                         modifier = Modifier.weight(1f),
                     )
@@ -157,6 +165,7 @@ fun RankingScreen(
                         label = "Mes",
                         variant = BigBtnVariant.Locked,
                         half = true,
+                        size = BigBtnSize.Secondary,
                         onClick = {},
                         modifier = Modifier.weight(1f),
                     )
@@ -254,32 +263,37 @@ private fun RankingFilaRow(posicion: Int, nombre: String, detalle: String, punto
     val esTop3 = posicion <= 3
     val shape = RoundedCornerShape(20.dp)
     if (esTop3) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(shape)
-                .background(podio.fondo)
-                .border(if (posicion == 1) 3.dp else 2.dp, podio.color, shape)
-                .voiceHint("Lugar $posicion. $nombre, $detalle, $puntos puntos.")
-                .padding(if (posicion == 1) 22.dp else 16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            Box(
+        Box(modifier = Modifier.fillMaxWidth()) {
+            Column(
                 modifier = Modifier
-                    .size(if (posicion == 1) 64.dp else 52.dp)
-                    .clip(CircleShape)
-                    .background(CecapiBackground)
-                    .border(if (posicion == 1) 3.dp else 2.dp, podio.color, CircleShape),
-                contentAlignment = Alignment.Center,
+                    .fillMaxWidth()
+                    .clip(shape)
+                    .background(podio.fondo)
+                    .border(if (posicion == 1) 3.dp else 2.dp, podio.color, shape)
+                    .let { if (destacado) it.border(2.dp, CecapiAccent, shape) else it }
+                    .voiceHint("Lugar $posicion. $nombre, $detalle, $puntos puntos." + if (destacado) " Eres tú." else "")
+                    .padding(if (posicion == 1) 22.dp else 16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                Icon(podio.icono!!, contentDescription = null, tint = podio.color, modifier = Modifier.size(if (posicion == 1) 34.dp else 28.dp))
+                Box(
+                    modifier = Modifier
+                        .size(if (posicion == 1) 64.dp else 52.dp)
+                        .clip(CircleShape)
+                        .background(CecapiBackground)
+                        .border(if (posicion == 1) 3.dp else 2.dp, podio.color, CircleShape),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(podio.icono!!, contentDescription = null, tint = podio.color, modifier = Modifier.size(if (posicion == 1) 34.dp else 28.dp))
+                }
+                Text(nombre, style = if (posicion == 1) MaterialTheme.typography.headlineSmall else MaterialTheme.typography.titleLarge, color = podio.color)
+                Text(detalle, style = MaterialTheme.typography.bodyMedium, color = CecapiTextMuted)
+                Text("$puntos pts", style = if (posicion == 1) MaterialTheme.typography.headlineSmall else MaterialTheme.typography.titleLarge, color = podio.color)
             }
-            Text(nombre, style = if (posicion == 1) MaterialTheme.typography.headlineSmall else MaterialTheme.typography.titleLarge, color = podio.color)
-            Text(detalle, style = MaterialTheme.typography.bodyMedium, color = CecapiTextMuted)
-            Text("$puntos pts", style = if (posicion == 1) MaterialTheme.typography.headlineSmall else MaterialTheme.typography.titleLarge, color = podio.color)
+            if (destacado) TuBadge(modifier = Modifier.align(Alignment.TopEnd).padding(10.dp))
         }
     } else {
+        Box(modifier = Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -287,7 +301,8 @@ private fun RankingFilaRow(posicion: Int, nombre: String, detalle: String, punto
                 .clip(RoundedCornerShape(16.dp))
                 .background(podio.fondo)
                 .border(1.dp, podio.color, RoundedCornerShape(16.dp))
-                .voiceHint("Lugar $posicion. $nombre, $detalle, $puntos puntos.")
+                .let { if (destacado) it.border(2.dp, CecapiAccent, RoundedCornerShape(16.dp)) else it }
+                .voiceHint("Lugar $posicion. $nombre, $detalle, $puntos puntos." + if (destacado) " Eres tú." else "")
                 .padding(horizontal = 14.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -304,34 +319,52 @@ private fun RankingFilaRow(posicion: Int, nombre: String, detalle: String, punto
             }
             Text("$puntos pts", style = MaterialTheme.typography.titleMedium, color = podio.color)
         }
+            if (destacado) TuBadge(modifier = Modifier.align(Alignment.TopEnd).padding(6.dp))
+        }
     }
 }
 
 @Composable
 private fun RankingRow(posicion: Int, nombre: String, detalle: String, puntos: Int, destacado: Boolean) {
     val shape = RoundedCornerShape(14.dp)
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .heightIn(min = 56.dp)
-            .clip(shape)
-            .background(CecapiSurfaceElevated)
-            .let { if (destacado) it.border(2.dp, CecapiAccent, shape) else it }
-            .voiceHint("Lugar $posicion. $nombre, $detalle, $puntos puntos.")
-            .padding(horizontal = 14.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
+    Box(modifier = Modifier.fillMaxWidth()) {
         Row(
-            modifier = Modifier.size(32.dp).clip(CircleShape).background(CecapiAccent.copy(alpha = 0.18f)),
-            horizontalArrangement = Arrangement.Center,
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 56.dp)
+                .clip(shape)
+                .background(CecapiSurfaceElevated)
+                .let { if (destacado) it.border(2.dp, CecapiAccent, shape) else it }
+                .voiceHint("Lugar $posicion. $nombre, $detalle, $puntos puntos." + if (destacado) " Eres tú." else "")
+                .padding(horizontal = 14.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text("$posicion", style = MaterialTheme.typography.labelLarge, color = CecapiAccent)
+            Row(
+                modifier = Modifier.size(32.dp).clip(CircleShape).background(CecapiAccent.copy(alpha = 0.18f)),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("$posicion", style = MaterialTheme.typography.labelLarge, color = CecapiAccent)
+            }
+            Column(modifier = Modifier.weight(1f).padding(start = 12.dp)) {
+                Text(nombre, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onBackground)
+                Text(detalle, style = MaterialTheme.typography.bodySmall, color = CecapiTextMuted)
+            }
+            Text("$puntos pts", style = MaterialTheme.typography.titleMedium, color = CecapiAccent)
         }
-        Column(modifier = Modifier.weight(1f).padding(start = 12.dp)) {
-            Text(nombre, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onBackground)
-            Text(detalle, style = MaterialTheme.typography.bodySmall, color = CecapiTextMuted)
-        }
-        Text("$puntos pts", style = MaterialTheme.typography.titleMedium, color = CecapiAccent)
+        if (destacado) TuBadge(modifier = Modifier.align(Alignment.TopEnd).padding(6.dp))
+    }
+}
+
+/** Para que "tú" se note sin importar el color del lugar o si quedaste fuera del podio. */
+@Composable
+private fun TuBadge(modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(50))
+            .background(CecapiAccent)
+            .padding(horizontal = 10.dp, vertical = 4.dp),
+    ) {
+        Text("TÚ", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Black, color = CecapiBackground)
     }
 }

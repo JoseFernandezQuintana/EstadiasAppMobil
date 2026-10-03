@@ -166,6 +166,19 @@ fun MicPad(
 enum class BigBtnVariant { Neutral, Accent, Danger, Success, Locked }
 
 /**
+ * Los 6 tamaños que puede tener una tarjeta grande en toda la app ("Volver" y el micrófono no
+ * pasan por BigBtn, son sus propios estándares aparte). [Standard] es el que ya usaba casi toda
+ * la pantalla y se queda como el default.
+ * [Hero] = tamaño 1, la más grande (referencia: el micrófono y el 1er lugar del podio).
+ * [Standard] = tamaño 3, el más común: el de casi todos los botones de la app.
+ * [Secondary] = tamaño 2, más chica: opciones bloqueadas/secundarias, o rejillas densas de 2.
+ * [Compact] = tamaño 6: como un [Standard] pero en rejilla de 2, para cuando el contenido no
+ * necesita tanto espacio (ej. "Probar avisos") — más grande que [Secondary], más chica que
+ * [Standard] a ancho completo.
+ */
+enum class BigBtnSize { Hero, Standard, Secondary, Compact }
+
+/**
  * The recurring full-width button from the Figma prototype: a big icon badge on top,
  * a bold label below, an optional muted subtitle under that — everything centered. This
  * is the main building block of almost every screen (Home, Login, Register, the signed-in
@@ -184,6 +197,7 @@ fun BigBtn(
     // Two of these share one row's width when the action is not the screen's priority
     // (e.g. Iniciar sesión / Crear cuenta on Home) — matches the Figma prototype's HalfBtn.
     half: Boolean = false,
+    size: BigBtnSize = BigBtnSize.Standard,
 ) {
     val tint = section?.color ?: when (variant) {
         BigBtnVariant.Danger -> CecapiError
@@ -223,7 +237,12 @@ fun BigBtn(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(if (half) 10.dp else 12.dp),
     ) {
-        val iconSize = if (half) 56.dp else 64.dp
+        val iconSize = when (size) {
+            BigBtnSize.Hero -> if (half) 64.dp else 76.dp
+            BigBtnSize.Standard -> if (half) 56.dp else 64.dp
+            BigBtnSize.Compact -> if (half) 50.dp else 58.dp
+            BigBtnSize.Secondary -> if (half) 44.dp else 50.dp
+        }
         val iconShape = RoundedCornerShape(if (half) 16.dp else 18.dp)
         Box(
             modifier = Modifier.size(iconSize).clip(iconShape).background(iconBg),
@@ -233,12 +252,24 @@ fun BigBtn(
                 imageVector = if (locked) Icons.Filled.Lock else icon,
                 contentDescription = null,
                 tint = if (locked) CecapiTextMuted else tint,
-                modifier = Modifier.size(if (half) 36.dp else 44.dp),
+                modifier = Modifier.size(
+                    when (size) {
+                        BigBtnSize.Hero -> if (half) 44.dp else 48.dp
+                        BigBtnSize.Standard -> if (half) 36.dp else 44.dp
+                        BigBtnSize.Compact -> if (half) 30.dp else 36.dp
+                        BigBtnSize.Secondary -> if (half) 26.dp else 30.dp
+                    },
+                ),
             )
         }
         Text(
             text = label,
-            fontSize = if (half) 18.sp else 22.sp,
+            fontSize = when (size) {
+                BigBtnSize.Hero -> if (half) 20.sp else 24.sp
+                BigBtnSize.Standard -> if (half) 18.sp else 22.sp
+                BigBtnSize.Compact -> if (half) 17.sp else 20.sp
+                BigBtnSize.Secondary -> if (half) 15.sp else 17.sp
+            },
             fontWeight = FontWeight.Black,
             lineHeight = if (half) 23.sp else 29.sp,
             color = tint,
