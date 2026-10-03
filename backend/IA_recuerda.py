@@ -2,7 +2,7 @@
 Versión de Owen del backend CECAPI (Módulo 3): main.py + la ruta /entender.
 
 Es una copia de main.py con todo en un solo archivo, para probarla sin tocar
-main.py. Arranca: uvicorn rama_owen:app --host 0.0.0.0 --port 8000
+main.py. Arranca: uvicorn IA_recuerda:app --host 0.0.0.0 --port 8000
 """
 
 import logging
