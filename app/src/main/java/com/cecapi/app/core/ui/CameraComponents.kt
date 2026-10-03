@@ -13,13 +13,11 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
@@ -53,16 +51,13 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import com.cecapi.app.core.theme.CecapiAccent
 import com.cecapi.app.core.theme.CecapiBackground
-import com.cecapi.app.core.theme.CecapiBorder
 import com.cecapi.app.core.theme.CecapiEyebrowStyle
-import com.cecapi.app.core.theme.CecapiSurface
 import com.cecapi.app.core.theme.CecapiSurfaceElevated
 import com.cecapi.app.core.theme.CecapiTextMuted
 import com.cecapi.app.core.theme.CecapiTextPrimary
@@ -77,10 +72,7 @@ private val analysisExecutor by lazy { Executors.newSingleThreadExecutor() }
 /**
  * The live camera picture shared by the text reader and the environment assistant. Calls [onReady]
  * with the capture use case once the camera is running, or with null if the camera cannot start.
- * [analyzer], when given, also runs on every preview frame (e.g. the text reader's live framing
- * guidance) — [CameraViewfinder] only wires it in; the caller owns its lifecycle (creating it with
- * `remember` and closing it in a `DisposableEffect`), since this component has no idea what kind of
- * analyzer it is or what closing it means.
+ * An optional [analyzer] receives the live frames (for example, to guide the framing by voice).
  */
 @Composable
 fun CameraViewfinder(
@@ -106,10 +98,6 @@ fun CameraViewfinder(
                             p.setSurfaceProvider(previewView.surfaceProvider)
                         }
                         val capture = ImageCapture.Builder().build()
-                        // Its own background thread, not the main one: ML Kit's analyze() is called many
-                        // times a second and scheduling it on the main executor can visibly stutter the UI
-                        // on a slower phone. KEEP_ONLY_LATEST drops a queued frame if one is still being
-                        // analyzed, so the hint is never behind by several frames' worth of lag.
                         val analysis = analyzer?.let {
                             ImageAnalysis.Builder()
                                 .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
@@ -125,8 +113,7 @@ fun CameraViewfinder(
                                     *listOfNotNull(preview, capture, analysis).toTypedArray(),
                                 )
                             } catch (e: Exception) {
-                                // Some phones cannot run preview + capture + analysis together: keep the
-                                // camera working without the live framing hints rather than fail outright.
+                                // Some cameras cannot run the frame analysis at the same time: keep preview and capture.
                                 if (analysis == null) throw e
                                 cameraProvider.unbindAll()
                                 cameraProvider.bindToLifecycle(
@@ -177,13 +164,7 @@ fun FramingGuide(modifier: Modifier = Modifier, color: Color = CecapiAccent) {
     }
 }
 
-/**
- * Header de cada pantalla: etiqueta, botón "Volver" y título, como tres elementos sueltos, sin
- * ninguna caja grande envolviéndolos juntos. "Volver" es un botón normal (una pastilla con su
- * propio fondo, como cualquier botón), no una tarjeta especial ni algo metido dentro de un marco.
- * Tampoco lleva un botón de comandos aparte: eso se pide por voz, como recuerda el pie del
- * micrófono (MicPad).
- */
+/** Header over the camera: back, what this screen is, and a button that reads out its commands. */
 @Composable
 fun ScreenTopBar(
     eyebrow: String,
@@ -192,31 +173,37 @@ fun ScreenTopBar(
     onCommands: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Column(modifier = modifier.fillMaxWidth()) {
-        Text(eyebrow, style = CecapiEyebrowStyle, color = CecapiTextMuted)
-        Text(
-            title,
-            style = MaterialTheme.typography.titleLarge,
-            color = CecapiTextPrimary,
-            modifier = Modifier.padding(top = 4.dp, bottom = 8.dp),
-        )
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(24.dp))
+            .background(CecapiBackground.copy(alpha = 0.82f))
+            .padding(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
         val backHelp = "Volver. Regresa a la pantalla anterior."
-        Row(
+        IconButton(
+            onClick = onBack,
             modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(min = 74.dp)
-                .clip(RoundedCornerShape(16.dp))
-                .background(CecapiSurfaceElevated)
-                .border(1.dp, CecapiBorder, RoundedCornerShape(16.dp))
-                .clickable(onClick = onBack)
+                .size(56.dp)
                 .semantics { contentDescription = backHelp }
-                .voiceHint(backHelp)
-                .padding(horizontal = 18.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                .voiceHint(backHelp),
         ) {
-            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null, tint = CecapiTextPrimary, modifier = Modifier.size(26.dp))
-            Text("Volver", style = MaterialTheme.typography.titleMedium, color = CecapiTextPrimary)
+            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null, tint = CecapiTextPrimary)
+        }
+        Column(modifier = Modifier.weight(1f).padding(horizontal = 8.dp)) {
+            Text(eyebrow, style = CecapiEyebrowStyle, color = CecapiTextMuted)
+            Text(title, style = MaterialTheme.typography.titleLarge, color = CecapiTextPrimary)
+        }
+        val commandsHelp = "Comandos. Toca para escuchar todo lo que puedes decir en esta pantalla."
+        IconButton(
+            onClick = onCommands,
+            modifier = Modifier
+                .size(56.dp)
+                .semantics { contentDescription = commandsHelp }
+                .voiceHint(commandsHelp),
+        ) {
+            Icon(Icons.Filled.Info, contentDescription = null, tint = CecapiAccent)
         }
     }
 }
@@ -229,7 +216,7 @@ fun CaptureButton(
     help: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    size: androidx.compose.ui.unit.Dp = 104.dp,
+    size: Dp = 104.dp,
 ) {
     Box(
         modifier = modifier
