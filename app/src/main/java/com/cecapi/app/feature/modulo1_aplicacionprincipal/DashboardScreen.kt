@@ -169,31 +169,40 @@ fun DashboardScreen(
             OfflineBanner(modifier = Modifier.padding(horizontal = 24.dp).padding(top = 16.dp))
         }
 
-        // Orden pedido por Pp: Gestión (si aplica), Clasificación, Cámara, Documentos, Actividades,
-        // Chats, Personalización, Editar mi cuenta, Configuración, Ayuda y soporte (si aplica),
-        // Reportar un incidente, Cerrar sesión.
+        // Orden actualizado según el mockup de Figma: Clasificación + Mi cuenta en media fila,
+        // Cámara, Documentos, Actividades, Chats, Personalización, Configuración, Gestión (si
+        // aplica), Ayuda y soporte (si aplica), Cerrar sesión. "Mi cuenta" reutiliza la pantalla
+        // de editar cuenta ya existente; no hay pantallas reales de Emergencias ni de Reportar un
+        // incidente (distinta de Ayuda y soporte), así que esas dos tarjetas del Figma no se
+        // agregan todavía.
         val rol = currentUser?.rol?.let(RolUsuario::fromCodigo)
         Column(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(top = 20.dp),
             verticalArrangement = Arrangement.spacedBy(18.dp),
         ) {
-            if (rol == RolUsuario.ADMINISTRADOR || rol == RolUsuario.DIRECTIVO || rol == RolUsuario.EDUCADOR) {
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 BigBtn(
-                    icon = Icons.Filled.AdminPanelSettings,
-                    label = "Gestión",
-                    variant = BigBtnVariant.Accent,
-                    onClick = viewModel::onGestionSelected,
+                    icon = Icons.Filled.EmojiEvents,
+                    label = "Clasificación",
+                    sub = "Tu lugar entre todos",
+                    section = Sections.Ranking,
+                    half = true,
+                    onClick = viewModel::onRankingSelected,
+                    modifier = Modifier.weight(1f),
+                )
+                BigBtn(
+                    icon = Icons.Filled.Edit,
+                    label = "Mi cuenta",
+                    sub = "Nombre, apodo y contraseña",
+                    half = true,
+                    onClick = viewModel::onEditarCuentaSelected,
+                    modifier = Modifier.weight(1f),
                 )
             }
             BigBtn(
-                icon = Icons.Filled.EmojiEvents,
-                label = "Clasificación",
-                section = Sections.Ranking,
-                onClick = viewModel::onRankingSelected,
-            )
-            BigBtn(
                 icon = Icons.Filled.CameraAlt,
                 label = "Cámara",
+                sub = "Lee texto y describe el entorno",
                 section = Sections.Camera,
                 onClick = { viewModel.onMenuItemSelected(MenuItem.Camera) },
             )
@@ -201,6 +210,7 @@ fun DashboardScreen(
                 BigBtn(
                     icon = Icons.Filled.Description,
                     label = documentos.title,
+                    sub = "Solicitudes oficiales",
                     section = Sections.Documents,
                     onClick = { viewModel.onMenuItemSelected(documentos) },
                 )
@@ -209,6 +219,7 @@ fun DashboardScreen(
                 BigBtn(
                     icon = Icons.Filled.Hearing,
                     label = actividades.title,
+                    sub = "Ejercicios de mejora auditiva",
                     section = Sections.Activities,
                     onClick = { viewModel.onMenuItemSelected(actividades) },
                 )
@@ -216,26 +227,33 @@ fun DashboardScreen(
             BigBtn(
                 icon = Icons.Filled.Chat,
                 label = "Chats",
+                sub = "Historial de conversaciones",
                 section = Sections.Chats,
                 onClick = { viewModel.onMenuItemSelected(MenuItem.Chats) },
             )
             BigBtn(
                 icon = Icons.Filled.Tune,
                 label = "Personalización",
+                sub = "Tu voz y preferencias",
                 section = Sections.Personalization,
                 onClick = { viewModel.onMenuItemSelected(MenuItem.Personalization) },
             )
             BigBtn(
-                icon = Icons.Filled.Edit,
-                label = "Editar mi cuenta",
-                onClick = viewModel::onEditarCuentaSelected,
-            )
-            BigBtn(
                 icon = Icons.Filled.Settings,
                 label = "Configuración",
+                sub = "Ajustes del sistema",
                 section = Sections.Settings,
                 onClick = viewModel::onSettingsSelected,
             )
+            if (rol == RolUsuario.ADMINISTRADOR || rol == RolUsuario.DIRECTIVO || rol == RolUsuario.EDUCADOR) {
+                BigBtn(
+                    icon = Icons.Filled.AdminPanelSettings,
+                    label = "Gestión",
+                    sub = "Administrar personas y roles",
+                    variant = BigBtnVariant.Accent,
+                    onClick = viewModel::onGestionSelected,
+                )
+            }
             // Reportar un problema NO es universal a propósito: es para que un alumno/usuario reporte, o
             // para que la aplicación detecte algo que ponga en riesgo a alguien y lo avise a un superior —
             // nunca un botón libre para cualquiera, para no abrir la puerta a reportes falsos o abuso.
@@ -243,6 +261,7 @@ fun DashboardScreen(
                 BigBtn(
                     icon = Icons.AutoMirrored.Filled.Help,
                     label = "Ayuda y soporte",
+                    sub = "Preguntas y soporte de la app",
                     section = Sections.Emergency,
                     onClick = viewModel::onSoporteSelected,
                 )

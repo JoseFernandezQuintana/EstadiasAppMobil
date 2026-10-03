@@ -190,6 +190,7 @@ fun HomeScreen(
             BigBtn(
                 icon = Icons.Filled.CameraAlt,
                 label = "Cámara",
+                sub = "Lee texto y describe el entorno",
                 section = Sections.Camera,
                 onClick = { viewModel.onMenuItemSelected(MenuItem.Camera) },
             )
@@ -197,6 +198,7 @@ fun HomeScreen(
                 BigBtn(
                     icon = Icons.Filled.Description,
                     label = documentos.title,
+                    sub = "Solicitudes oficiales",
                     section = Sections.Documents,
                     onClick = { viewModel.onMenuItemSelected(documentos) },
                 )
@@ -204,12 +206,14 @@ fun HomeScreen(
             BigBtn(
                 icon = Icons.Filled.Tune,
                 label = "Personalización",
+                sub = "Tu voz y preferencias",
                 section = Sections.Personalization,
                 onClick = { viewModel.onMenuItemSelected(MenuItem.Personalization) },
             )
             BigBtn(
                 icon = Icons.Filled.Settings,
                 label = "Configuración",
+                sub = "Ajustes del sistema",
                 section = Sections.Settings,
                 onClick = viewModel::onSettingsSelected,
             )
